@@ -940,93 +940,104 @@ async function runBatchInjection(questionsList, onProgress) {
 }
 
 // ------------------------------------------------------------------------
-// 4.6. INJEKSI FORM MATERI & BAHAN AJAR AFRESTO
+// 4.6. INJEKSI FORM MATERI & BAHAN AJAR AFRESTO (FROALA + DOM UNIVERSAL)
 // ------------------------------------------------------------------------
 
 async function injectLearningMaterial(data) {
   if (!data) throw new Error("Data materi kosong.");
 
-  // 1. Judul Materi (#nama)
-  const inputNama = document.getElementById('nama') || document.querySelector('input[name="nama"]');
-  if (inputNama && data.judul) {
-    inputNama.value = data.judul;
-    inputNama.dispatchEvent(new Event('input', { bubbles: true }));
-    inputNama.dispatchEvent(new Event('change', { bubbles: true }));
+  let injectedElements = [];
+
+  // 1. INJEKSI JUDUL MATERI (Multi-Selector Fallback)
+  const inputTitle = document.getElementById('nama') ||
+                     document.querySelector('input[name="nama"]') ||
+                     document.getElementById('judul') ||
+                     document.querySelector('input[name="judul"]') ||
+                     document.querySelector('input[name="nama_materi"]') ||
+                     document.querySelector('input[name="title"]') ||
+                     document.querySelector('input[placeholder*="Judul" i]') ||
+                     document.querySelector('input[placeholder*="Nama" i]');
+
+  if (inputTitle && data.judul) {
+    inputTitle.focus();
+    inputTitle.value = data.judul;
+    inputTitle.dispatchEvent(new Event('input', { bubbles: true }));
+    inputTitle.dispatchEvent(new Event('change', { bubbles: true }));
+    inputTitle.blur();
+    injectedElements.push("Judul Materi");
   }
 
-  // 2. Konten Artikel (#konten)
-  const textareaKonten = document.getElementById('konten') || document.querySelector('textarea[name="konten"]');
-  if (textareaKonten && data.konten) {
-    textareaKonten.value = data.konten;
-    textareaKonten.dispatchEvent(new Event('input', { bubbles: true }));
-    textareaKonten.dispatchEvent(new Event('change', { bubbles: true }));
-
-    // Sinkronisasi ke TinyMCE jika aktif di Afresto
-    if (typeof window.tinymce !== 'undefined') {
-      const editorKonten = window.tinymce.get('konten');
-      if (editorKonten) {
-        try {
-          editorKonten.setContent(data.konten);
-        } catch (e) {}
-      }
-    }
+  // 2. JIKA ADA TOMBOL 'Ketik Isi Artikel' DAN EDITOR BELUM MUNCUL, BANTU KLIK OTOMATIS
+  const btnKetik = Array.from(document.querySelectorAll('button, a, .btn')).find(el => {
+    const t = el.textContent.trim().toLowerCase();
+    return t.includes('ketik isi artikel') || t.includes('buka editor');
+  });
+  const isEditorAlreadyOpen = Boolean(document.querySelector('.fr-element, .note-editable, iframe[id*="konten"]'));
+  if (btnKetik && !isEditorAlreadyOpen) {
+    try {
+      btnKetik.click();
+      await sleep(300);
+    } catch (e) {}
   }
 
-  // 3. Penugasan Checkbox (#penugasan)
-  const checkPenugasan = document.getElementById('penugasan') || document.querySelector('input[name="penugasan"]');
+  // 3. INJEKSI KONTEN ARTIKEL (FROALA / TINYMCE / TEXTAREA)
+  const kontenSuccess = setRichTextEditorValue('konten', data.konten);
+  if (kontenSuccess) injectedElements.push("Konten Artikel");
+
+  // 4. PENUGASAN CHECKBOX (#penugasan)
+  const checkPenugasan = document.getElementById('penugasan') || 
+                         document.querySelector('input[name="penugasan"]') ||
+                         document.querySelector('input[name*="tugas"]');
   if (checkPenugasan) {
-    const shouldCheck = Boolean(data.denganPenugasan);
+    const shouldCheck = Boolean(data.denganPenugasan || (data.pertanyaan && data.pertanyaan.trim().length > 0));
     if (checkPenugasan.checked !== shouldCheck) {
       checkPenugasan.checked = shouldCheck;
       checkPenugasan.dispatchEvent(new Event('change', { bubbles: true }));
       checkPenugasan.dispatchEvent(new Event('click', { bubbles: true }));
+      await sleep(200);
     }
   }
 
-  // 4. Pertanyaan Tugas (#pertanyaan)
-  if (data.pertanyaan) {
-    const textareaPertanyaan = document.getElementById('pertanyaan') || document.querySelector('textarea[name="pertanyaan"]');
-    if (textareaPertanyaan) {
-      textareaPertanyaan.value = data.pertanyaan;
-      textareaPertanyaan.dispatchEvent(new Event('input', { bubbles: true }));
-      textareaPertanyaan.dispatchEvent(new Event('change', { bubbles: true }));
-
-      if (typeof window.tinymce !== 'undefined') {
-        const editorTugas = window.tinymce.get('pertanyaan');
-        if (editorTugas) {
-          try {
-            editorTugas.setContent(data.pertanyaan);
-          } catch (e) {}
-        }
-      }
-    }
+  // 5. INJEKSI PERTANYAAN TUGAS SISWA (FROALA / TINYMCE / TEXTAREA)
+  if (data.pertanyaan && data.pertanyaan.trim().length > 0) {
+    const tugasSuccess = setRichTextEditorValue('pertanyaan', data.pertanyaan);
+    if (tugasSuccess) injectedElements.push("Pertanyaan Tugas");
   }
 
-  // 5. Akses Rombel Global (#ikut_global)
+  // 6. AKSES ROMBEL GLOBAL (#ikut_global)
   const checkIkutGlobal = document.getElementById('ikut_global') || document.querySelector('input[name="ikut_global"]');
   if (checkIkutGlobal && data.ikutGlobal !== false) {
     checkIkutGlobal.checked = true;
     checkIkutGlobal.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // 6. Jadwal Materi Mulai (#materi_mulai_global)
-  const inputMulai = document.getElementById('materi_mulai_global') || document.querySelector('input[name="materi_mulai_global"]');
+  // 7. JADWAL MATERI MULAI
+  const inputMulai = document.getElementById('materi_mulai_global') || 
+                     document.querySelector('input[name="materi_mulai_global"]') ||
+                     document.getElementById('materi_mulai') || 
+                     document.querySelector('input[name="materi_mulai"]');
   if (inputMulai && data.materiMulai) {
     inputMulai.value = data.materiMulai;
     inputMulai.dispatchEvent(new Event('input', { bubbles: true }));
     inputMulai.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // 7. Jadwal Materi Ditutup (#materi_ditutup_global)
-  const inputTutup = document.getElementById('materi_ditutup_global') || document.querySelector('input[name="materi_ditutup_global"]');
+  // 8. JADWAL MATERI DITUTUP
+  const inputTutup = document.getElementById('materi_ditutup_global') || 
+                     document.querySelector('input[name="materi_ditutup_global"]') ||
+                     document.getElementById('materi_ditutup') || 
+                     document.querySelector('input[name="materi_ditutup"]');
   if (inputTutup) {
     inputTutup.value = data.materiDitutup || "";
     inputTutup.dispatchEvent(new Event('input', { bubbles: true }));
     inputTutup.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // 8. Batas Penugasan (#limit_penugasan_global)
-  const inputLimit = document.getElementById('limit_penugasan_global') || document.querySelector('input[name="limit_penugasan_global"]');
+  // 9. BATAS PENUGASAN
+  const inputLimit = document.getElementById('limit_penugasan_global') || 
+                     document.querySelector('input[name="limit_penugasan_global"]') ||
+                     document.getElementById('limit_penugasan') || 
+                     document.querySelector('input[name="limit_penugasan"]');
   if (inputLimit && data.limitPenugasan) {
     inputLimit.value = data.limitPenugasan;
     inputLimit.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1034,14 +1045,130 @@ async function injectLearningMaterial(data) {
   }
 
   // Visual highlight efek pada form agar guru melihat perubahan langsung di halaman Afresto
-  if (inputNama) {
-    inputNama.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    inputNama.style.transition = 'box-shadow 0.3s ease';
-    inputNama.style.boxShadow = '0 0 0 3px #10b981';
+  const targetHighlight = document.querySelector('.fr-element, #konten, input[name="nama"], #nama, input[name="judul"]');
+  if (targetHighlight) {
+    targetHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetHighlight.style.transition = 'box-shadow 0.3s ease';
+    targetHighlight.style.boxShadow = '0 0 0 4px #10b981';
     setTimeout(() => {
-      inputNama.style.boxShadow = '';
-    }, 2000);
+      targetHighlight.style.boxShadow = '';
+    }, 2500);
   }
+
+  return {
+    success: true,
+    injectedElements,
+    judul: data.judul,
+    materiMulai: data.materiMulai,
+    limitPenugasan: data.limitPenugasan
+  };
+}
+
+/**
+ * Injektor Universal untuk Editor Konten & Tugas (Mendukung Froala, TinyMCE, Summernote, ContentEditable, dan Textarea)
+ */
+function setRichTextEditorValue(targetType, htmlContent) {
+  if (!htmlContent) return false;
+
+  let injected = false;
+
+  // A. FROALA EDITOR (.fr-element / contenteditable)
+  const frElements = Array.from(document.querySelectorAll('.fr-element, .fr-view[contenteditable="true"]'));
+  if (frElements.length > 0) {
+    let targetFr = null;
+    if (targetType === 'konten') {
+      // Prioritaskan fr-element pertama atau yang berdekatan dengan tombol/teks 'Artikel' / 'Konten'
+      targetFr = frElements.find(el => {
+        const parentText = el.closest('section, div, .form-group, .card')?.textContent || "";
+        return parentText.toLowerCase().includes('artikel') || parentText.toLowerCase().includes('isi');
+      }) || frElements[0];
+    } else if (targetType === 'pertanyaan') {
+      // Prioritaskan fr-element kedua atau yang di bawah section 'Pertanyaan' / 'Tugas'
+      targetFr = frElements.find(el => {
+        const parentText = el.closest('section, div, .form-group, .card')?.textContent || "";
+        return parentText.toLowerCase().includes('pertanyaan') || parentText.toLowerCase().includes('tugas');
+      }) || (frElements.length > 1 ? frElements[1] : null);
+    }
+
+    if (targetFr) {
+      targetFr.focus();
+      targetFr.innerHTML = htmlContent;
+      targetFr.classList.remove('fr-placeholder');
+
+      const frBox = targetFr.closest('.fr-box') || targetFr.parentElement;
+      if (frBox) {
+        // Sembunyikan placeholder bawaan Froala
+        frBox.querySelectorAll('.fr-placeholder').forEach(p => {
+          p.style.display = 'none';
+        });
+
+        // Hitung ulang karakter untuk counter Froala
+        const counter = frBox.querySelector('.fr-counter, [class*="counter"]');
+        if (counter) {
+          const charLen = targetFr.textContent?.length || 0;
+          counter.textContent = `Characters : ${charLen}`;
+        }
+
+        // Sinkronisasi ke hidden textarea terdekat di dalam form
+        const nearbyTextarea = frBox.parentElement?.querySelector('textarea') || 
+                               frBox.querySelector('textarea') ||
+                               frBox.previousElementSibling;
+        if (nearbyTextarea && nearbyTextarea.tagName === 'TEXTAREA') {
+          nearbyTextarea.value = htmlContent;
+          nearbyTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+          nearbyTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+
+      targetFr.dispatchEvent(new Event('input', { bubbles: true }));
+      targetFr.dispatchEvent(new Event('change', { bubbles: true }));
+      targetFr.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ' }));
+      targetFr.blur();
+      injected = true;
+    }
+  }
+
+  // B. TINYMCE IFRAME (Jika halaman menggunakan TinyMCE)
+  const iframe = findEditorIframe(targetType);
+  if (iframe) {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc && doc.body) {
+        doc.body.innerHTML = htmlContent;
+        doc.body.dispatchEvent(new Event('input', { bubbles: true }));
+        doc.body.dispatchEvent(new Event('change', { bubbles: true }));
+        injected = true;
+      }
+    } catch (e) {}
+  }
+
+  // C. SUMMERNOTE EDITOR (.note-editable)
+  const noteEditables = Array.from(document.querySelectorAll('.note-editable'));
+  if (noteEditables.length > 0) {
+    const targetNote = (targetType === 'konten') ? noteEditables[0] : (noteEditables[1] || noteEditables[0]);
+    if (targetNote) {
+      targetNote.innerHTML = htmlContent;
+      targetNote.dispatchEvent(new Event('input', { bubbles: true }));
+      targetNote.dispatchEvent(new Event('change', { bubbles: true }));
+      injected = true;
+    }
+  }
+
+  // D. TEXTAREA FORM STANDAR (Fallback & Sinkronisasi Cadangan)
+  const selector = (targetType === 'konten')
+    ? '#konten, textarea[name="konten"], textarea[name="isi"], textarea[name="artikel"], #isi'
+    : '#pertanyaan, textarea[name="pertanyaan"], textarea[name="tugas"]';
+  
+  const textareas = Array.from(document.querySelectorAll(selector));
+  textareas.forEach(t => {
+    t.value = htmlContent;
+    t.dispatchEvent(new Event('input', { bubbles: true }));
+    t.dispatchEvent(new Event('change', { bubbles: true }));
+    injected = true;
+  });
+
+  return injected;
+}
 
   return { 
     success: true, 

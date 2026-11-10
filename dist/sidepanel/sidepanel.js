@@ -2821,7 +2821,10 @@ function initMateriModule() {
           if (chrome.runtime.lastError || !res || !res.success) {
             alert("Gagal memasukkan materi: " + (res?.error || chrome.runtime.lastError?.message || "Pastikan Anda berada di halaman Form Materi Afresto."));
           } else {
-            alert("✅ Berhasil!\n\nJudul materi, isi artikel, dan pertanyaan tugas telah dimasukkan ke formulir Afresto.\n\nSilakan periksa kembali dan sesuaikan jadwal Anda langsung di halaman Afresto, lalu klik tombol 'Simpan' jika sudah selesai.");
+            const detail = (res.injectedElements && res.injectedElements.length > 0)
+              ? `Komponen yang berhasil diisi:\n• ${res.injectedElements.join('\n• ')}\n\n`
+              : '';
+            alert(`✅ Berhasil Dimasukkan ke Form Afresto!\n\n${detail}Silakan periksa kembali artikel di editor dan sesuaikan jadwal Anda langsung di halaman Afresto, lalu klik tombol 'Simpan' jika sudah selesai.`);
           }
         });
       } catch (err) {
