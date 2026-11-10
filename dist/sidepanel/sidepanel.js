@@ -390,6 +390,8 @@ function updateKeyBadge(text, state) {
 // 2. DETEKSI STATUS HALAMAN AFRESTO
 // ------------------------------------------------------------------------
 
+let currentActiveModule = 'soal'; // 'soal' | 'materi'
+
 async function checkActiveTabStatus() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -399,6 +401,10 @@ async function checkActiveTabStatus() {
     }
 
     const tabUrl = (tab.url || "").toLowerCase();
+    const isMateriTab = (currentActiveModule === 'materi');
+    const standbyText = isMateriTab
+      ? "Standby: Buka menu KBM → Materi Pembelajaran di Afresto."
+      : "Standby: Buka menu Evaluasi → Buat Evaluasi AKM → Tulis Soal Baru.";
 
     // 1. Cek apakah tab berada di domain Afresto
     if (!tabUrl.includes("afresto.id")) {
@@ -406,17 +412,17 @@ async function checkActiveTabStatus() {
       return;
     }
 
-    // 2. Filter instan berdasarkan URL: modul non-soal langsung set Standby
-    const nonQuestionModules = ['jurnal', 'presensi', 'rekap', 'kalender', 'profil', 'dashboard', 'silabus', 'rpp'];
-    if (nonQuestionModules.some(m => tabUrl.includes(m))) {
-      updateStatusBanner(false, "Standby: Buka menu Evaluasi → Buat Evaluasi AKM → Tulis Soal Baru.");
+    // 2. Filter instan berdasarkan URL: modul non-operasional langsung set Standby sesuai modul yang sedang aktif
+    const nonOperationalModules = ['jurnal', 'presensi', 'rekap', 'kalender', 'profil', 'dashboard', 'silabus', 'rpp'];
+    if (nonOperationalModules.some(m => tabUrl.includes(m))) {
+      updateStatusBanner(false, standbyText);
       return;
     }
 
-    // 3. Tanya content script untuk verifikasi fisik form soal di DOM
+    // 3. Tanya content script untuk verifikasi fisik form di DOM
     chrome.tabs.sendMessage(tab.id, { action: "CHECK_PAGE_STATUS" }, (res) => {
       if (chrome.runtime.lastError || !res) {
-        updateStatusBanner(false, "Standby: Buka menu Evaluasi → Buat Evaluasi AKM → Tulis Soal Baru.");
+        updateStatusBanner(false, standbyText);
         return;
       }
 
@@ -424,15 +430,29 @@ async function checkActiveTabStatus() {
         applyDetectedAcademic(res.detectedAcademic);
       }
 
-      if (res.isSoalPage) {
-        updateStatusBanner("active", "Terhubung: Halaman Input Soal Afresto Aktif!");
-      } else if (res.isMateriPage) {
-        updateStatusBanner("active", "Terhubung: Halaman Input Materi Afresto Aktif!");
-        updateMateriPageDetection(res.detectedAcademic);
-      } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
-        updateStatusBanner("prep", "Mode Persiapan: Data Mapel Terdeteksi! (Buka 'Butir Soal' atau 'Materi' untuk input)");
+      if (isMateriTab) {
+        // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB MATERI & BAHAN AJAR ---
+        if (res.isMateriPage) {
+          updateStatusBanner("active", "Terhubung: Halaman Input Materi Afresto Aktif!");
+          updateMateriPageDetection(res.detectedAcademic);
+        } else if (res.isSoalPage) {
+          updateStatusBanner("prep", "Halaman Soal Terdeteksi. Buka menu KBM → Materi jika ingin mengisi bahan ajar.");
+        } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
+          updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka menu Materi untuk input)`);
+        } else {
+          updateStatusBanner("waiting", standbyText);
+        }
       } else {
-        updateStatusBanner("waiting", "Standby: Buka menu Evaluasi atau Materi di Afresto.");
+        // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB SOAL ASESMEN ---
+        if (res.isSoalPage) {
+          updateStatusBanner("active", "Terhubung: Halaman Input Soal Afresto Aktif!");
+        } else if (res.isMateriPage) {
+          updateStatusBanner("prep", "Halaman Materi Terdeteksi. Buka menu Evaluasi → Butir Soal jika ingin input soal.");
+        } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
+          updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka 'Butir Soal' untuk input)`);
+        } else {
+          updateStatusBanner("waiting", standbyText);
+        }
       }
     });
   } catch (err) {
@@ -2514,6 +2534,7 @@ function initMateriModule() {
 
   // Tab Switcher
   function switchModuleTab(mode) {
+    currentActiveModule = mode;
     if (mode === 'materi') {
       if (tabModuleMateri) {
         tabModuleMateri.classList.add('active');
@@ -2537,6 +2558,8 @@ function initMateriModule() {
       if (moduleSoalWrapper) moduleSoalWrapper.classList.remove('hidden');
       if (moduleMateriWrapper) moduleMateriWrapper.classList.add('hidden');
     }
+    // Segera perbarui status banner agar langsung sesuai dengan konteks tab yang aktif
+    checkActiveTabStatus();
   }
 
   if (tabModuleSoal) tabModuleSoal.addEventListener('click', () => switchModuleTab('soal'));

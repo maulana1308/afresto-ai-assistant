@@ -174,6 +174,33 @@ function checkIsQuestionPage() {
 }
 
 /**
+ * Memeriksa apakah tab Afresto saat ini sedang membuka halaman form input Materi
+ */
+function checkIsMateriPage() {
+  const currentUrl = (window.location.href || "").toLowerCase();
+
+  // 1. Blacklist modul Afresto yang bukan pembuatan materi
+  const nonMateriKeywords = ['jurnal', 'presensi', 'rekap', 'kalender', 'profil', 'dashboard', 'silabus', 'rpp', 'evaluasi'];
+  if (nonMateriKeywords.some(kw => currentUrl.includes(kw))) {
+    return false;
+  }
+
+  // 2. Cek apakah ada di URL KBM / Materi
+  const isMateriUrl = currentUrl.includes('/materi') || currentUrl.includes('/kbm');
+
+  // 3. Cek form field materi di DOM
+  const hasJudul = Boolean(document.getElementById('nama') || document.querySelector('input[name="nama"]'));
+  const hasKonten = Boolean(
+    document.getElementById('konten') || 
+    document.querySelector('textarea[name="konten"]') || 
+    document.getElementById('konten_ifr') || 
+    findEditorIframe('konten')
+  );
+
+  return Boolean((isMateriUrl && (hasJudul || hasKonten)) || (hasJudul && hasKonten));
+}
+
+/**
  * Mencari elemen iframe TinyMCE dengan strategi fallback adaptif (ID, Name, Class)
  */
 function findEditorIframe(target) {
@@ -189,6 +216,14 @@ function findEditorIframe(target) {
            document.querySelector('iframe[id*="pertanyaan"]') ||
            document.querySelector('iframe[name*="pertanyaan"]') ||
            document.querySelector('.mce-edit-area iframe');
+  }
+
+  // 2b. Jika nama/selector mengandung 'konten'
+  if (typeof target === 'string' && target.toLowerCase().includes('konten')) {
+    return document.querySelector('#konten_ifr') ||
+           document.querySelector('iframe[name="konten_ifr"]') ||
+           document.querySelector('iframe[id*="konten"]') ||
+           document.querySelector('iframe[name*="konten"]');
   }
 
   // 3. Jika nama/selector mengandung 'pilihan'
@@ -1023,10 +1058,7 @@ async function injectLearningMaterial(data) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "CHECK_PAGE_STATUS") {
     const isSoal = checkIsQuestionPage();
-    const isMateri = Boolean(
-      window.location.href.includes('/kbm/materi/form') ||
-      (document.getElementById('nama') && document.getElementById('konten'))
-    );
+    const isMateri = checkIsMateriPage();
     const detected = detectAcademicInfoFromPage();
     const alertDanger = document.querySelector('.alert-danger, .alert-error, .alert-warning')?.textContent?.trim() || null;
     const countMatch = document.body?.innerText?.match(/Soal tersimpan saat ini ::\s*(\d+)/i);
