@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Buku Panduan Guru - Afresto AI Assistant</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 16mm 14mm 16mm 14mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  *, *:before, *:after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.55;
+    font-size: 11pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Cover Header */
+  .header-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+    color: #ffffff;
+    padding: 24px 28px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .header-badge {
+    display: inline-block;
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    margin-bottom: 10px;
+  }
+  .header-title {
+    font-size: 20pt;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 0 8px 0;
+    color: #ffffff;
+  }
+  .header-subtitle {
+    font-size: 11pt;
+    color: #cbd5e1;
+    margin: 0;
+    line-height: 1.45;
+  }
+
+  /* Section Styles */
+  h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 26px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .h2-icon {
+    font-size: 15pt;
+  }
+
+  h3 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1e3a8a;
+    margin-top: 18px;
+    margin-bottom: 8px;
+  }
+
+  p {
+    margin-top: 0;
+    margin-bottom: 10px;
+  }
+
+  /* Comparison Grid / Table */
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 18px;
+    font-size: 9.5pt;
+  }
+  .comparison-table th {
+    background-color: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+  }
+  .comparison-table td {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    vertical-align: top;
+  }
+  .comparison-table tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  /* Step Cards */
+  .step-container {
+    margin-bottom: 14px;
+  }
+  .step-card {
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #2563eb;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+  .step-card.word {
+    border-left-color: #059669;
+  }
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #1e3a8a;
+    color: #ffffff;
+    font-size: 9pt;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+  }
+  .step-number.green {
+    background-color: #059669;
+  }
+  .step-title {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #0f172a;
+    display: inline;
+  }
+  .step-desc {
+    margin-top: 6px;
+    margin-bottom: 0;
+    font-size: 10pt;
+    color: #334155;
+  }
+
+  /* Callouts / Alerts */
+  .callout {
+    padding: 12px 14px;
+    border-radius: 6px;
+    margin: 14px 0;
+    font-size: 9.5pt;
+    line-height: 1.5;
+    page-break-inside: avoid;
+  }
+  .callout-info {
+    background-color: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
+  }
+  .callout-success {
+    background-color: #ecfdf5;
+    border-left: 4px solid #10b981;
+    color: #065f46;
+  }
+  .callout-warning {
+    background-color: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    color: #92400e;
+  }
+
+  /* Code / Pre block */
+  .sample-box {
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 8.8pt;
+    color: #0f172a;
+    line-height: 1.45;
+    margin: 8px 0;
+    page-break-inside: avoid;
+    white-space: pre-wrap;
+  }
+
+  .badge-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    font-size: 8.5pt;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .footer-note {
+    font-size: 8.5pt;
+    color: #64748b;
+    text-align: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 10px;
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+
+  <!-- COVER / HEADER -->
+  <div class="header-card">
+    <div class="header-badge">Panduan Resmi Pendidik • Versi 2.0.0</div>
+    <h1 class="header-title">BUKU PANDUAN PRAKTIS GURU<br>AFRESTO AI ASSISTANT</h1>
+    <p class="header-subtitle">
+      Solusi Cerdas Pembuatan &amp; Penginputan Soal Ujian Otomatis ke Portal Afresto.<br>
+      Dilengkapi Tutorial Lengkap Jalur AI Gemini dan Jalur Import Naskah Word (.docx).
+    </p>
+  </div>
+
+  <!-- BAGIAN 1: PERBANDINGAN DUA JALUR -->
+  <h2><span class="h2-icon">📌</span> 1. Pilih Jalur Kerja Sesuai Kebutuhan Anda</h2>
+  <p>Afresto AI Assistant menyediakan <strong>dua jalur utama</strong> yang sangat fleksibel untuk membantu Bapak/Ibu Guru menyusun soal tanpa mengetik ulang satu per satu:</p>
+
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th style="width: 20%;">Fitur &amp; Kebutuhan</th>
+        <th style="width: 40%;"><span class="badge-pill badge-blue">JALUR 1</span> Buat Soal Otomatis via AI Gemini</th>
+        <th style="width: 40%;"><span class="badge-pill badge-green">JALUR 2</span> Upload Naskah Word (.docx)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Kondisi Guru</strong></td>
+        <td>Belum memiliki naskah soal; ingin AI membuatkan draf soal baru berdasarkan materi/TP.</td>
+        <td>Sudah memiliki naskah soal ujian di komputer dalam format file Microsoft Word (.docx).</td>
+      </tr>
+      <tr>
+        <td><strong>Kebutuhan Kunci API</strong></td>
+        <td><strong>Memerlukan Kunci API Gemini</strong> (Gratis 100% dari Google AI Studio).</td>
+        <td><strong>TIDAK PERLU KUNCI API</strong> (100% Bebas Kuota &amp; Bisa Digunakan Kapan Saja).</td>
+      </tr>
+      <tr>
+        <td><strong>Kecepatan</strong></td>
+        <td>Membuat 5–10 soal berkualitas dalam 10–20 detik.</td>
+        <td>Membaca 30–50 soal Word beserta gambar dalam 1 detik.</td>
+      </tr>
+      <tr>
+        <td><strong>Kustomisasi</strong></td>
+        <td>Bisa memilih tingkat kognitif Bloom (C1 s.d. C6/HOTS) dan membuat stimulus gambar otomatis.</td>
+        <td>Mendukung formula matematika/kimia bertingkat, tabel, gambar diagram, dan bullet numbering.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- BAGIAN 2: TUTORIAL JALUR 1 (AI GEMINI) -->
+  <h2><span class="h2-icon">🤖</span> 2. Jalur 1: Cara Membuat &amp; Input Soal Menggunakan AI Gemini</h2>
+
+  <div class="callout callout-info">
+    <strong>💡 Mengapa Menggunakan Jalur Ini?</strong> Sangat cocok saat Bapak/Ibu Guru ingin membuat variasi soal baru yang sesuai Kurikulum Merdeka, memerlukan stimulus bacaan kontekstual, atau membutuhkan variasi level kognitif (C1 Mengingat sampai C6 Mencipta) secara instan.
+  </div>
+
+  <div class="step-card">
+    <span class="step-number">Langkah 1</span>
+    <h3 class="step-title">Pasang Kunci API Gemini Gratis (Cukup 1 Kali di Awal)</h3>
+    <p class="step-desc">
+      1. Buka situs resmi Google: <strong>https://aistudio.google.com/app/apikey</strong> (login dengan akun Gmail/Belajar.id Anda).<br>
+      2. Klik tombol <strong>"Create API key"</strong> lalu salin (copy) kode kunci yang muncul (diawali <code>AIzaSy...</code>).<br>
+      3. Di browser Chrome, klik ikon <strong>Afresto AI Assistant</strong> &rarr; klik ikon <strong>Pengaturan (⚙️)</strong> di pojok kanan atas.<br>
+      4. Tempelkan kunci ke kolom <strong>Gemini API Key</strong> &rarr; klik <strong>"Tes Koneksi"</strong> (muncul badge hijau 🟢) &rarr; klik <strong>"Simpan Kunci"</strong>.
+    </p>
+  </div>
+
+  <div class="step-card">
+    <span class="step-number">Langkah 2</span>
+    <h3 class="step-title">Buka Halaman Form Input Soal di Portal Afresto</h3>
+    <p class="step-desc">
+      1. Login ke web Afresto sekolah Anda di Google Chrome.<br>
+      2. Buka menu: <strong>Evaluasi &rarr; Butir Soal &rarr; Tulis Soal Baru</strong>.<br>
+      3. Buka panel samping ekstensi. Panel akan otomatis mendeteksi nama Mata Pelajaran dan Kelas dengan status hijau: <strong>🟢 Halaman Input Soal Afresto Aktif</strong>.
+    </p>
+  </div>
+
+  <div class="step-card">
+    <span class="step-number">Langkah 3</span>
+    <h3 class="step-title">Isi Tujuan Pembelajaran (TP) &amp; Pilih Tipe Soal</h3>
+    <p class="step-desc">
+      1. Pada tab <strong>"Generate via AI Gemini"</strong>, ketikkan materi atau Tujuan Pembelajaran (contoh: <em>"Perangkat keras komputer dan fungsinya"</em>).<br>
+      2. Tentukan jumlah soal dan centang tipe soal yang diinginkan (Pilihan Ganda, Benar/Salah, Menjodohkan, Isian, atau Uraian).<br>
+      3. Pilih <strong>Tingkat Kognitif</strong> (misal: <em>C3 Aplikasi</em>, <em>C4 Analisis/HOTS</em>, atau <em>Campuran Seimbang</em>).<br>
+      4. <em>(Opsional)</em> Aktifkan saklar <strong>"Generate Stimulus Gambar Edukatif"</strong> jika soal membutuhkan diagram ilustrasi visual.<br>
+      5. Klik tombol biru: <strong>"✨ Generate Paket Soal via Gemini"</strong>.
+    </p>
+  </div>
+
+  <div class="step-card">
+    <span class="step-number">Langkah 4</span>
+    <h3 class="step-title">Tinjau Antrean Soal &amp; Input Otomatis ke Afresto</h3>
+    <p class="step-desc">
+      1. Butir soal yang dihasilkan AI akan muncul rapi di daftar <strong>Antrean Soal (Playlist)</strong> lengkap dengan kunci jawaban dan pembahasannya.<br>
+      2. Bapak/Ibu dapat mengedit teks soal atau kunci jawaban kapan saja dengan mengeklik tombol <strong>✏️ Edit</strong>.<br>
+      3. Klik tombol hijau besar di bagian bawah: <strong>"🚀 Input Otomatis ke Afresto"</strong>.<br>
+      4. Asisten akan otomatis mengisi formulir web Afresto, memilih opsi kunci jawaban, mengunggah gambar stimulus (jika ada), menekan tombol Simpan, dan beralih ke butir berikutnya sampai tuntas!
+    </p>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- BAGIAN 3: TUTORIAL JALUR 2 (UPLOAD WORD) -->
+  <h2><span class="h2-icon">📄</span> 3. Jalur 2: Cara Upload Naskah Word (.docx) ke Portal Afresto</h2>
+
+  <div class="callout callout-success">
+    <strong>✨ Keunggulan Jalur Word:</strong> <strong>100% Gratis &amp; Tanpa Kuota API Key!</strong> Sangat ideal untuk memasukkan naskah ujian Penilaian Akhir Semester (PAS), Sumatif Akhir Tahun (SAT), atau bank soal sekolah yang sudah Bapak/Ibu miliki di laptop.
+  </div>
+
+  <div class="step-card word">
+    <span class="step-number green">Langkah 1</span>
+    <h3 class="step-title">Gunakan Template Resmi (TEMPLATE_SOAL_AFRESTO.docx)</h3>
+    <p class="step-desc">
+      1. Di panel ekstensi, klik tombol <strong>"Unduh Template Naskah Word"</strong> (atau gunakan berkas <code>TEMPLATE_SOAL_AFRESTO.docx</code> yang ada di dalam paket rilis).<br>
+      2. Buka berkas tersebut di Microsoft Word. Anda cukup mengganti isi teks soal dan opsi jawaban sesuai materi ujian Anda.
+    </p>
+  </div>
+
+  <div class="step-card word">
+    <span class="step-number green">Langkah 2</span>
+    <h3 class="step-title">Aturan Format Penulisan di Word yang Terbaca Otomatis</h3>
+    <p class="step-desc">
+      Sistem parser Afresto AI Assistant sangat pintar dan fleksibel mendukung format kebiasaan guru:
+    </p>
+    <ul style="margin: 6px 0 6px 20px; font-size: 9.8pt; color: #334155;">
+      <li><strong>Bullet &amp; Numbering:</strong> Bebas menggunakan tombol penomoran otomatis Word (<em>Word Auto-Numbering / Bullets</em>) maupun nomor ketikan manual (<code>1.</code>, <code>2.</code>, <code>A.</code>, <code>B.</code>).</li>
+      <li><strong>Format Kunci Jawaban:</strong> Cukup tulis <code>Kunci: B</code> di bawah opsi, ATAU <strong>cetak tebal (bold)</strong> pada huruf opsi yang benar (contoh: <code>**B. HTTPS**</code>), ATAU tulis dalam kurung di akhir baris soal (contoh: <code>... adalah (B)</code>).</li>
+      <li><strong>Gambar &amp; Rumus:</strong> Sisipkan gambar diagram (Insert Picture) atau rumus matematika/kimia Word Equation (OMML). Keduanya akan otomatis terbaca dan diubah menjadi tampilan siap pakai di Afresto!</li>
+    </ul>
+  </div>
+
+  <div class="step-card word">
+    <span class="step-number green">Langkah 3</span>
+    <h3 class="step-title">Upload File Word ke Ekstensi</h3>
+    <p class="step-desc">
+      1. Pada panel samping ekstensi, klik tab <strong>"Impor Naskah Word (.docx)"</strong>.<br>
+      2. Klik tombol <strong>"Pilih File Naskah Word"</strong>, lalu cari dan pilih dokumen Word ujian Anda dari laptop.<br>
+      3. Dalam hitungan detik, seluruh soal (1 sampai puluhan soal) langsung diekstrak rapi ke dalam daftar antrean!
+    </p>
+  </div>
+
+  <div class="step-card word">
+    <span class="step-number green">Langkah 4</span>
+    <h3 class="step-title">Periksa Indikator Pre-Flight &amp; Mulai Input Otomatis</h3>
+    <p class="step-desc">
+      1. Periksa kotak status di bawah judul: jika muncul <strong>🟢 Siap Input (100% Valid)</strong>, berarti seluruh soal telah lengkap opsi dan kuncinya.<br>
+      2. Pastikan halaman web portal Afresto Anda berada di formulir: <strong>Evaluasi &rarr; Butir Soal &rarr; Tulis Soal Baru</strong>.<br>
+      3. Klik tombol hijau besar: <strong>"🚀 Input Otomatis ke Afresto"</strong>.<br>
+      4. Ekstensi akan menginputkan seluruh soal Word Anda satu per satu ke Afresto dengan aman, tepat, dan bebas salah klik!
+    </p>
+  </div>
+
+  <!-- BAGIAN 4: CHEATSHEET 6 TIPE SOAL -->
+  <h2><span class="h2-icon">📚</span> 4. Ragam Contoh Format 6 Tipe Soal Resmi di Word</h2>
+  <p>Berikut adalah acuan penulisan untuk 6 tipe soal resmi yang dapat langsung terbaca sempurna oleh Afresto AI Assistant:</p>
+
+  <div class="sample-box"><strong>1. Pilihan Ganda (PG Tunggal)</strong>
+1. Protokol jaringan yang mentransfer web terenkripsi SSL/TLS adalah...
+A. HTTP
+B. HTTPS
+C. FTP
+D. SMTP
+E. Telnet
+Kunci: B
+Pembahasan: HTTPS menggunakan enkripsi SSL/TLS pada port 443.</div>
+
+  <div class="sample-box"><strong>2. Pilihan Ganda Kompleks (Multi-Kunci Jawaban)</strong>
+2. Manakah sistem operasi berikut yang bersifat open-source? (Pilih 3 benar)
+A. Ubuntu Linux
+B. Windows 11
+C. Debian GNU/Linux
+D. Fedora Linux
+E. macOS
+Kunci: A, C, D</div>
+
+  <div class="sample-box"><strong>3. Benar / Salah (Format Pernyataan Berbutir)</strong>
+3. Tentukan nilai kebenaran dari setiap pernyataan keamanan siber berikut!
+A. Mengaktifkan 2FA mempersulit akun diretas. (Benar)
+B. Password aman cukup menggunakan 4 angka tanggal lahir. (Salah)
+C. Phishing adalah penipuan tautan palsu pencuri data. (Benar)
+Kunci: A: Benar, B: Salah, C: Benar</div>
+
+  <div class="sample-box"><strong>4. Menjodohkan / Mencocokkan (Format Pasangan Premis - Respon)</strong>
+4. Pasangkanlah perangkat jaringan di sebelah kiri dengan fungsi utamanya!
+1. Router - Mengarahkan paket data antar subnet jaringan yang berbeda
+2. Switch - Menghubungkan perangkat komputer dalam satu Local Area Network
+3. Access Point - Memancarkan sinyal gelombang radio koneksi Wi-Fi nirkabel
+Kunci: 1-A, 2-B, 3-C</div>
+
+  <div class="sample-box"><strong>5. Isian Singkat (Mendukung Alternatif Jawaban dengan Garis Miring)</strong>
+5. Presiden pertama Republik Indonesia yang membacakan teks proklamasi adalah... (Ir. Soekarno)
+Kunci: Ir. Soekarno / Soekarno / Bung Karno</div>
+
+  <div class="sample-box"><strong>6. Uraian / Essay (Dilengkapi Rubrik Penilaian)</strong>
+6. Jelaskan 2 kelebihan utama kabel serat optik (fiber optic) dibandingkan kabel tembaga UTP!
+Kunci: Rubrik Penilaian: 1. Kecepatan transfer gigabit lebih tinggi, 2. Kebal gangguan gelombang elektromagnetik.</div>
+
+  <div class="page-break"></div>
+
+  <!-- BAGIAN 5: FITUR UNGGULAN & TIPS ERGONOMI GURU -->
+  <h2><span class="h2-icon">⭐</span> 5. Fitur Bantuan Ekstra Penunjang Produktivitas Guru</h2>
+
+  <div class="step-card">
+    <h3 class="step-title">🎮 Studio Simulasi &amp; Test-Drive (Uji Coba Mengerjakan Soal)</h3>
+    <p class="step-desc">
+      Bapak/Ibu ingin mencoba menjawab soal seperti tampilan siswa sebelum diinput ke Afresto? Klik tombol <strong>"🎮 Studio Preview"</strong> di panel. Anda dapat mensimulasikan kuis interaktif, memeriksa kebenaran kunci, dan mencetak lembar soal ke kertas fisik atau PDF lembar ujian!
+    </p>
+  </div>
+
+  <div class="step-card">
+    <h3 class="step-title">🔄 Tombol Urutkan Semula &amp; Reset Status</h3>
+    <p class="step-desc">
+      Jika urutan soal sempat teracak atau Anda ingin mengulang penginputan dari awal:<br>
+      • Klik tombol <strong>"Urutkan"</strong>: Mengembalikan posisi seluruh kartu soal persis ke urutan nomor aslinya (1..N).<br>
+      • Klik tombol <strong>"Reset"</strong>: Mengembalikan status seluruh soal menjadi siap input kembali.
+    </p>
+  </div>
+
+  <div class="step-card">
+    <h3 class="step-title">☀️/🌙 Tema Ganda (Kertas Gading Hangat &amp; Mode Gelap)</h3>
+    <p class="step-desc">
+      Mengetik soal berjam-jam membuat mata lelah? Klik tombol matahari/bulan di kanan atas. Mode terang dirancang dengan palet <em>Humanist Warm Paper</em> (kertas gading klasik yang menyejukkan mata), sedangkan mode gelap melindungi mata saat menyusun soal di malam hari.
+    </p>
+  </div>
+
+  <div class="step-card">
+    <h3 class="step-title">⚡ Update Otomatis 1-Klik (UPDATE_APLIKASI.bat)</h3>
+    <p class="step-desc">
+      Jika sekolah merilis versi pembaruan aplikasi, Anda tidak perlu mengulang instalasi dari nol. Cukup klik 2x file <strong>UPDATE_APLIKASI.bat</strong> di folder ekstensi, lalu klik ikon panah putar (Refresh 🔄) di menu <code>chrome://extensions</code>. Versi terbaru langsung aktif dalam 3 detik!
+    </p>
+  </div>
+
+  <!-- BAGIAN 6: FAQ & PEMECAHAN MASALAH -->
+  <h2><span class="h2-icon">❓</span> 6. Tanya Jawab &amp; Bantuan Cepat (FAQ)</h2>
+
+  <div class="callout callout-warning">
+    <strong>Tanya: Tombol "Input Otomatis ke Afresto" berwarna abu-abu dan tidak bisa diklik. Mengapa?</strong><br>
+    <strong>Jawab:</strong> Tombol sengaja dikunci jika browser Anda belum membuka formulir soal Afresto. Buka portal Afresto &rarr; klik menu <strong>Evaluasi &rarr; Butir Soal &rarr; Tulis Soal Baru</strong>. Begitu form terbuka, tombol akan otomatis menyala hijau terang!
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>Tanya: Apakah akun portal Afresto dan data pribadi saya aman?</strong><br>
+    <strong>Jawab:</strong> 100% AMAN. Ekstensi ini berjalan sepenuhnya secara lokal di browser komputer Anda (Client-Side). Asisten hanya membantu mengetikkan teks ke formulir seperti asisten pribadi, tanpa pernah mengirimkan kata sandi Anda ke server luar mana pun.
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>Tanya: Bagaimana jika internet terputus di tengah proses input otomatis?</strong><br>
+    <strong>Jawab:</strong> Jangan khawatir! Ekstensi memiliki sistem proteksi anti-duplikasi. Butir soal yang sudah tersimpan ditandai centang hijau (<code>✅ Injected</code>). Saat internet kembali online, cukup klik tombol input lagi, dan asisten akan melanjutkan hanya soal-soal yang belum tersimpan.
+  </div>
+
+  <div class="callout callout-warning">
+    <strong>Tanya: Apakah saya harus online terus saat menginput soal dari Word?</strong><br>
+    <strong>Jawab:</strong> Membaca dan mem-parsing soal dari berkas Word bekerja 100% secara offline tanpa internet. Anda hanya butuh internet untuk membuka portal web Afresto sekolah Anda saat mengklik tombol input otomatis.
+  </div>
+
+  <div class="footer-note">
+    Diterbitkan oleh Tim Pengembang Afresto AI Assistant • Didedikasikan untuk Efisiensi &amp; Kesejahteraan Pendidik Indonesia
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Afresto AI Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Mascot Hero Banner (Compact & Cohesive Header) -->
+    <div class="mascot-hero-banner" id="mascot-hero-banner">
+      <img src="../icons/banner.png" alt="Afresto AI Mascot - Hai! Aku AFRESTO! Semangat bertemu denganmu!!" class="mascot-hero-img" id="mascot-hero-img">
+      <button type="button" id="btn-toggle-hero-banner" class="btn-banner-toggle" title="Ciutkan / Tampilkan banner maskot" aria-label="Toggle Banner Maskot">
+        <span id="banner-toggle-icon">▲</span>
+      </button>
+    </div>
+
+    <!-- Sticky / Floating Top Container ("Hover" Header & Shortcut Bar) -->
+    <div class="sticky-top-container" id="sticky-top-container">
+      <!-- 1. Header & Status Bar -->
+      <header class="header">
+        <div class="logo-area">
+          <img src="../icons/icon48.png" alt="Afresto Logo" class="logo-icon app-logo-avatar">
+          <div>
+            <h1 class="app-title">Afresto AI Assistant <span class="app-version-badge">v3.0.0</span></h1>
+            <p class="app-subtitle">Sistem Pembuat Soal &amp; Materi Pembelajaran</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="btn-toggle-theme" class="btn-icon" title="Ganti Tema (Kertas Hangat / Dark Slate)" aria-label="Ganti Tema Tampilan">
+            <span id="theme-icon">☀️</span>
+          </button>
+          <button id="btn-toggle-settings" class="btn-icon" title="Pengaturan API Key" aria-label="Buka Pengaturan API Key">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Status Koneksi Halaman Afresto -->
+      <div id="page-status-banner" class="status-banner status-waiting">
+        <span class="status-indicator"></span>
+        <span id="page-status-text">Memeriksa halaman Afresto...</span>
+      </div>
+
+      <!-- App Update Available Notification Banner -->
+      <div id="app-update-banner" class="app-update-banner hidden">
+        <div class="update-banner-content">
+          <span class="update-banner-icon">🎉</span>
+          <div class="update-banner-text">
+            <strong id="update-banner-title">Versi Baru Tersedia!</strong>
+            <span id="update-banner-desc">Jalankan <code>UPDATE_APLIKASI.bat</code> di folder Anda, lalu klik Refresh (🔄).</span>
+          </div>
+        </div>
+        <button id="btn-dismiss-update" class="btn-dismiss-update" title="Tutup" aria-label="Tutup Notifikasi">✕</button>
+      </div>
+
+      <!-- Quick Question Navigator ("Shortcut Nomor Soal") -->
+      <div id="question-nav-bar" class="question-nav-bar hidden">
+        <div class="q-nav-header">
+          <div class="q-nav-title">
+            <span class="q-nav-icon">🎯</span>
+            <span>Shortcut Soal <span id="q-nav-count" class="q-nav-count-badge">0</span></span>
+          </div>
+          <div class="q-nav-actions">
+            <div class="q-nav-legend">
+              <span class="q-nav-legend-item"><span class="q-nav-dot dot-ready"></span> Siap</span>
+              <span class="q-nav-legend-item"><span class="q-nav-dot dot-injected"></span> Terinput</span>
+            </div>
+            <button type="button" id="btn-toggle-q-nav" class="btn-xs btn-ghost" title="Ciutkan / Bentangkan shortcut soal" aria-label="Toggle Navigator">
+              <span id="q-nav-toggle-icon">▲</span>
+            </button>
+            <button type="button" id="btn-scroll-top" class="btn-xs btn-ghost" title="Kembali ke paling atas" aria-label="Scroll to Top">
+              ⬆️ Top
+            </button>
+          </div>
+        </div>
+        <div id="question-nav-grid" class="question-nav-grid">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Settings Panel (BYOK Gemini API Key) -->
+    <section id="settings-panel" class="settings-panel hidden">
+      <div class="card-inner">
+        <div class="panel-header">
+          <h3 class="panel-title">Kunci Gemini API (BYOK)</h3>
+          <span id="api-key-status-badge" class="badge badge-neutral">Belum Diuji</span>
+        </div>
+        <p class="text-muted">Kunci tersimpan aman secara lokal di browser Anda.</p>
+        <div class="form-group">
+          <label for="input-api-key">Gemini API Key</label>
+          <div class="input-with-action">
+            <input type="password" id="input-api-key" placeholder="AIzaSy..." autocomplete="off">
+            <button id="btn-toggle-key-visibility" class="btn-sm btn-ghost" title="Tampilkan atau sembunyikan kunci" aria-label="Tampilkan atau sembunyikan kunci">👁️</button>
+          </div>
+          <small class="helper-link">
+            Belum punya kunci? <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Dapatkan API Key Gratis di Google AI Studio &rarr;</a>
+          </small>
+        </div>
+        <div class="form-group">
+          <label for="select-model">Model AI</label>
+          <select id="select-model">
+            <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash-Lite (Super Cepat & Paling Stabil Free Tier - Rekomendasi)</option>
+            <option value="gemini-3.8-flash">Gemini 3.8 Flash (Paling Cerdas & Mutakhir)</option>
+            <option value="gemini-3.6-flash">Gemini 3.6 Flash (Sangat Cepat & Andal)</option>
+            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (Super Ringan)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Model Stabil)</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Standar Produksi)</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button id="btn-test-key" class="btn btn-secondary">Tes Koneksi</button>
+          <button id="btn-save-key" class="btn btn-primary">Simpan Kunci</button>
+        </div>
+        <div id="settings-alert" class="alert hidden"></div>
+      </div>
+    </section>
+
+    <!-- 3. Form Generator Soal -->
+    <main class="main-content">
+      <!-- Navigasi Modul Utama: Soal Evaluasi vs Materi & Bahan Ajar -->
+      <div class="module-segmented-nav" role="tablist" aria-label="Pilihan Modul Afresto">
+        <button type="button" id="tab-module-soal" class="module-tab-btn active" role="tab" aria-selected="true">
+          <span>📝</span> Soal Asesmen
+        </button>
+        <button type="button" id="tab-module-materi" class="module-tab-btn" role="tab" aria-selected="false">
+          <span>📚</span> Materi &amp; Bahan Ajar
+        </button>
+      </div>
+
+      <!-- MODUL 1: SOAL ASESMEN (EXISTING) -->
+      <div id="module-soal-wrapper">
+        <!-- Section Identitas Kurikulum (dengan Fitur Accordion Menciut) -->
+        <section class="card" id="parameter-card">
+        <!-- Accordion Summary Bar (Tampil saat form menciut setelah generate sukses) -->
+        <div id="parameter-summary-bar" class="parameter-summary-bar hidden">
+          <div class="summary-info">
+            <span class="summary-check">✓</span>
+            <div>
+              <div class="summary-title" id="summary-mapel-kelas">Parameter Asesmen Terkunci</div>
+              <div class="summary-sub" id="summary-composition">Memuat rincian paket soal...</div>
+            </div>
+          </div>
+          <button type="button" id="btn-expand-form" class="btn-xs btn-outline-primary" title="Buka dan ubah formulir parameter">
+            Ubah ✎
+          </button>
+        </div>
+
+        <!-- Form Body (Collapsible) -->
+        <div id="parameter-form-body">
+          <!-- Tab Pilihan: Buat via AI vs Upload Word (.docx) -->
+          <div class="source-mode-segmented-control" role="tablist" aria-label="Sumber Pembuatan Soal">
+            <button type="button" id="tab-source-ai" class="source-mode-btn active" role="tab" aria-selected="true">
+              ✨ Buat via AI
+            </button>
+            <button type="button" id="tab-source-docx" class="source-mode-btn" role="tab" aria-selected="false">
+              📄 Upload Word (.docx)
+            </button>
+          </div>
+
+          <!-- Bagian 1: Form Generator AI Standar -->
+          <div id="ai-generator-fields">
+            <div class="card-header-with-action">
+              <h2 class="card-title">Parameter Asesmen</h2>
+              <button id="btn-sync-academic" class="btn-xs btn-secondary" title="Sinkronkan Mata Pelajaran & Kelas dari halaman Afresto saat ini" aria-label="Sinkronkan Data Akademik">
+                🔄 Sinkronkan Data
+              </button>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group col-7">
+                <label for="input-mapel">Mata Pelajaran</label>
+                <input type="text" id="input-mapel" placeholder="Contoh: Pemeliharaan Mesin, Matematika">
+              </div>
+              <div class="form-group col-5">
+                <label for="select-kelas">Tingkat / Kelas</label>
+                <select id="select-kelas">
+                  <option value="Fase E (Kelas 10 SMK/SMA)">Kelas 10 (Fase E)</option>
+                  <option value="Fase F (Kelas 11 SMK/SMA)">Kelas 11 (Fase F)</option>
+                  <option value="Fase F (Kelas 12 SMK/SMA)">Kelas 12 (Fase F)</option>
+                  <option value="Kelas 9 SMP">Kelas 9 SMP</option>
+                  <option value="Kelas 8 SMP">Kelas 8 SMP</option>
+                  <option value="Kelas 7 SMP">Kelas 7 SMP</option>
+                  <option value="Umum">Tingkat Umum</option>
+                </select>
+              </div>
+            </div>
+
+          <!-- Badge Deteksi Otomatis Mapel & Kelas dari Afresto -->
+          <div id="detected-academic-badge" class="detected-badge hidden">
+            <span>✨ Terdeteksi Otomatis: <strong id="detected-text">...</strong></span>
+          </div>
+
+          <!-- Kolom TP (Tujuan Pembelajaran) -->
+          <div class="form-group">
+            <label for="input-tp">
+              Tujuan Pembelajaran (TP)
+              <span class="badge-tag">Rekomendasi Kurikulum</span>
+            </label>
+            <textarea id="input-tp" rows="2" placeholder="Contoh: Peserta didik mampu mendiagnosis kerusakan sistem kelistrikan body dan menganalisis faktor penyebab kegagalan relay..."></textarea>
+            
+            <!-- Soft Warning Banner (Dinamis) -->
+            <div id="tp-soft-warning" class="soft-warning hidden">
+              <span class="warning-icon">💡</span>
+              <div class="warning-text">
+                <strong>Saran Kurikulum:</strong> Memasukkan TP akan membuat butir soal terkalibrasi persis dengan indikator capaian kurikulum.
+              </div>
+            </div>
+          </div>
+
+          <!-- Materi Pokok -->
+          <div class="form-group">
+            <label for="input-materi">Materi Pokok / Sub-Bab</label>
+            <input type="text" id="input-materi" placeholder="Contoh: Prinsip Kerja Relay dan Solenoid Katup">
+          </div>
+
+          <!-- Kolom Prompt Khusus Guru -->
+          <div class="form-group">
+            <label for="input-prompt">Instruksi Khusus / Prompt Tambahan Guru</label>
+            <textarea id="input-prompt" rows="2" placeholder="Contoh: Berikan stimulus studi kasus bengkel mobil, gunakan data tabel, hindari pilihan jawaban 'semua benar'..."></textarea>
+          </div>
+
+          <!-- Pemilih Multi-Tipe Soal -->
+          <div class="form-group">
+            <label>Komposisi Tipe Soal (Multi-Tipe):</label>
+            <div class="multi-type-grid">
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-pg" checked>
+                  <span>Pilihan Ganda</span>
+                </label>
+                <input type="number" id="qty-pg" min="1" max="50" value="5" class="input-qty">
+              </div>
+
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-pg-kompleks">
+                  <span>PG Kompleks</span>
+                </label>
+                <input type="number" id="qty-pg-kompleks" min="1" max="50" value="2" class="input-qty">
+              </div>
+
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-benar-salah">
+                  <span>Benar / Salah</span>
+                </label>
+                <input type="number" id="qty-benar-salah" min="1" max="50" value="2" class="input-qty">
+              </div>
+
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-mencocokkan">
+                  <span>Mencocokkan / Menjodohkan</span>
+                </label>
+                <input type="number" id="qty-mencocokkan" min="1" max="50" value="2" class="input-qty">
+              </div>
+
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-isian">
+                  <span>Isian Singkat</span>
+                </label>
+                <input type="number" id="qty-isian" min="1" max="50" value="1" class="input-qty">
+              </div>
+
+              <div class="type-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="check-uraian">
+                  <span>Uraian / Essay</span>
+                </label>
+                <input type="number" id="qty-uraian" min="1" max="50" value="1" class="input-qty">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="select-kognitif">Tingkat Kognitif Dominan</label>
+            <select id="select-kognitif">
+              <option value="HOTS (C4 Analisis, C5 Evaluasi, C6 Kreasi)" selected>HOTS (C4 Analisis, C5 Evaluasi, C6 Kreasi)</option>
+              <option value="MOTS (C3 Aplikasi)">MOTS (C3 Aplikasi / Penerapan)</option>
+              <option value="LOTS (C1 Mengingat, C2 Memahami)">LOTS (C1 Mengingat, C2 Memahami)</option>
+              <option value="Campuran Seimbang (30% LOTS, 40% MOTS, 30% HOTS)">Campuran Seimbang (30% LOTS, 40% MOTS, 30% HOTS)</option>
+            </select>
+          </div>
+
+          <!-- Pengaturan Ilustrasi Gambar AI & Vektor -->
+          <div class="form-group image-config-group">
+            <div class="checkbox-label" style="margin-bottom: 6px;">
+              <input type="checkbox" id="check-include-image">
+              <label for="check-include-image" style="margin-bottom: 0; cursor: pointer; font-weight: 600; font-size: 12px;">
+                🎨 Sertakan Ilustrasi Gambar AI
+              </label>
+            </div>
+            <div id="image-style-container" class="image-style-row hidden" style="margin-top: 6px;">
+              <label for="select-image-style" style="font-size: 11px; margin-bottom: 2px;">Gaya Visual Gambar:</label>
+              <select id="select-image-style" class="form-control-sm">
+                <option value="AUTO" selected>🪄 Otomatis (Sesuaikan Konteks / Prompt)</option>
+                <option value="REALISTIS">📸 Foto Realistis / Nyata</option>
+                <option value="KARTUN_3D">🧸 Kartun 3D / Gaya Animasi</option>
+                <option value="FLAT_2D">📐 Ilustrasi 2D Flat / Buku Ajar</option>
+                <option value="DIAGRAM_TEKNIS">📊 Diagram Teknis / Skematis</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="btn-generate" class="btn btn-primary btn-block btn-lg">
+            <span class="btn-text">✨ Generate Paket Soal via Gemini</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </div>
+        <!-- /#ai-generator-fields -->
+
+        <!-- Bagian 2: Zona Ingesti Bank Soal Word (.docx) -->
+        <div id="docx-ingestion-container" class="docx-ingestion-container hidden">
+          <div class="card-header-with-action">
+            <h2 class="card-title">Ingesti Bank Soal Word</h2>
+            <span class="badge badge-neutral">Client-Side Parser</span>
+          </div>
+          <p class="text-muted" style="font-size: 11px; margin-bottom: 10px;">
+            Unggah berkas Word (.docx) naskah soal Anda. Berkas diproses 100% lokal di browser tanpa server luar.
+          </p>
+
+          <!-- Template Download Helper Banner -->
+          <div class="docx-template-helper" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; padding: 8px 10px; background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-control);">
+            <div style="font-size: 11px; color: var(--text-primary); line-height: 1.3;">
+              <strong>Format Standar:</strong> Gunakan template resmi &amp; panduan agar soal 100% terbaca presisi
+            </div>
+            <div style="display: flex; gap: 4px; flex-shrink: 0;">
+              <button type="button" id="btn-download-template" class="btn-xs btn-outline-primary" style="white-space: nowrap;" title="Unduh berkas contoh template format Word (.docx) siap pakai">
+                📥 Template Word
+              </button>
+              <button type="button" id="btn-download-guide" class="btn-xs btn-outline-primary" style="white-space: nowrap;" title="Unduh buku panduan lengkap format PDF">
+                📖 Panduan PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Zona Drag & Drop -->
+          <div class="docx-drop-box" id="docx-drop-box" tabindex="0" role="button" aria-label="Unggah Berkas Word .docx">
+            <div class="docx-drop-icon" aria-hidden="true">📄</div>
+            <div class="docx-drop-title">Tarik & Lepas File (.docx) ke Sini</div>
+            <p class="docx-drop-sub">atau <span class="docx-browse-link">klik untuk memilih dari komputer</span></p>
+            <input type="file" id="input-docx-file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;">
+          </div>
+
+          <!-- Panel Ringkasan Setelah Berkas Dipilih -->
+          <div id="docx-summary-box" class="docx-summary-box hidden">
+            <div class="docx-file-row">
+              <span class="docx-file-icon">📑</span>
+              <div class="docx-file-meta">
+                <div class="docx-filename" id="docx-filename">bank_soal.docx</div>
+                <div class="docx-filesize" id="docx-filesize">0 KB</div>
+              </div>
+              <button type="button" id="btn-cancel-docx" class="btn-xs btn-ghost" title="Ganti berkas">Ganti</button>
+            </div>
+
+            <!-- Statistik Ekstraksi Teks Lokal -->
+            <div class="docx-stats-grid" id="docx-stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+              <div class="docx-stat-item">
+                <span class="stat-val tabular-nums" id="docx-stat-soal">0</span>
+                <span class="stat-lbl">Soal</span>
+              </div>
+              <div class="docx-stat-item">
+                <span class="stat-val tabular-nums" id="docx-stat-paragraf">0</span>
+                <span class="stat-lbl">Paragraf</span>
+              </div>
+              <div class="docx-stat-item">
+                <span class="stat-val tabular-nums" id="docx-stat-tabel">0</span>
+                <span class="stat-lbl">Tabel</span>
+              </div>
+              <div class="docx-stat-item">
+                <span class="stat-val tabular-nums" id="docx-stat-gambar">0</span>
+                <span class="stat-lbl">Gambar</span>
+              </div>
+            </div>
+
+            <!-- Opsi Metode Impor -->
+            <div class="docx-mode-choice" style="margin-top: 10px; font-size: 11px;">
+              <label class="checkbox-label" style="margin-bottom: 2px; cursor: pointer;">
+                <input type="checkbox" id="check-docx-use-ai">
+                <span>🪄 Gunakan AI Gemini untuk melengkapi kunci / merapikan teks</span>
+              </label>
+              <p class="text-muted" style="font-size: 10px; margin-left: 20px;">
+                Jika tidak dicentang, soal disalin <strong>100% persis teks asli Word</strong> tanpa modifikasi AI.
+              </p>
+            </div>
+
+            <div id="docx-alert" class="alert hidden" style="margin-top: 8px;"></div>
+
+            <button type="button" id="btn-convert-docx" class="btn btn-primary btn-block btn-lg" style="margin-top: 10px;">
+              <span class="btn-text">⚡ Impor ke Daftar Soal</span>
+              <span class="spinner hidden"></span>
+            </button>
+          </div>
+        </div>
+        <!-- /#docx-ingestion-container -->
+      </div>
+      <!-- /#parameter-form-body -->
+      </section>
+
+      <!-- 4. Area Hasil Generate & Otomasi Input -->
+      <section id="results-section" class="card hidden">
+        <div class="results-header">
+          <div class="results-title-group">
+            <h2 class="card-title">Daftar Antrean Soal</h2>
+            <span id="results-count-badge" class="badge">0 Soal</span>
+          </div>
+          <div class="results-primary-action">
+            <button id="btn-open-preview" class="btn-sm btn-outline-primary" title="Buka Studio Simulasi & Sandbox QC Guru">🖥️ Studio QC</button>
+          </div>
+        </div>
+
+        <!-- Toolbar Aksi Daftar Soal Responsif -->
+        <div class="playlist-toolbar">
+          <div class="toolbar-left">
+            <button id="btn-sort-type" class="btn-xs btn-secondary" title="Urutkan rapi kembali ke nomor urut semula">Urut</button>
+            <button id="btn-reset-status" class="btn-xs btn-secondary" title="Kembalikan status semua butir soal menjadi siap diinput">Reset</button>
+            <button id="btn-shuffle" class="btn-xs btn-secondary" title="Acak urutan nomor butir">Acak</button>
+          </div>
+          <div class="toolbar-right">
+            <button id="btn-clear-playlist" class="btn-xs btn-danger-pill" title="Kosongkan seluruh daftar antrean soal">🗑️ Hapus Semua</button>
+          </div>
+        </div>
+
+        <!-- Pre-Flight Auto-Checker Status Box -->
+        <div id="preflight-status-box" class="preflight-status-box hidden">
+          <div class="preflight-icon" id="preflight-icon">⚠️</div>
+          <div class="preflight-content">
+            <div class="preflight-title" id="preflight-title">Pemeriksaan Kelengkapan Soal</div>
+            <div class="preflight-sub" id="preflight-sub">Memeriksa kelengkapan opsi &amp; kunci jawaban...</div>
+          </div>
+        </div>
+
+        <!-- Studio Preview Banner Callout -->
+        <div class="studio-preview-callout" id="studio-preview-callout">
+          <div class="callout-text">
+            <span class="callout-icon">🎮</span>
+            <span>Uji coba siswa & telaah naskah di <strong>Studio Simulasi QC</strong></span>
+          </div>
+          <button type="button" id="btn-launch-studio-banner" class="btn-xs btn-outline-primary" title="Buka Studio Simulasi QC">
+            Buka Studio ↗
+          </button>
+        </div>
+
+        <!-- Daftar Kartu Butir Soal -->
+        <div id="questions-list" class="questions-list"></div>
+
+        <!-- Docked Sticky Bottom Action Bar -->
+        <div class="docked-action-bar">
+          <!-- Real-Time Progress Tracker -->
+          <div id="injection-progress-container" class="progress-box hidden">
+            <div class="progress-info">
+              <span id="progress-status-label">Menginputkan...</span>
+              <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <p id="progress-detail" class="progress-detail">Menyiapkan injektor...</p>
+          </div>
+
+          <!-- Main Auto-Input Control Bar -->
+          <div class="auto-input-bar">
+            <button id="btn-auto-input-all" class="btn btn-success btn-block btn-lg">
+              🚀 Input Otomatis Soal Tersisa ke Afresto
+            </button>
+            <button id="btn-stop-injection" class="btn btn-danger hidden">
+              ⏹️ Berhenti
+            </button>
+          </div>
+        </div>
+      </section>
+      </div>
+      <!-- /#module-soal-wrapper -->
+
+      <!-- MODUL 2: MATERI & BAHAN AJAR (BARU) -->
+      <div id="module-materi-wrapper" class="hidden">
+        <!-- Badge Deteksi Otomatis Form Materi Afresto -->
+        <div id="materi-detected-badge" class="detected-badge hidden" style="margin-bottom: 10px;">
+          <span>🎯 Terdeteksi Form Materi: <strong id="materi-detected-text">...</strong></span>
+        </div>
+
+        <section class="card" id="materi-parameter-card">
+          <div class="card-header-with-action">
+            <h2 class="card-title">Parameter Bahan Ajar</h2>
+            <button type="button" id="btn-sync-materi" class="btn-xs btn-secondary" title="Sinkronkan Mata Pelajaran dari halaman Afresto" aria-label="Sinkronkan Data">
+              🔄 Sinkronkan
+            </button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-7">
+              <label for="input-materi-mapel">Mata Pelajaran</label>
+              <input type="text" id="input-materi-mapel" placeholder="Contoh: IPA, Matematika">
+            </div>
+            <div class="form-group col-5">
+              <label for="select-materi-kelas">Tingkat / Kelas</label>
+              <select id="select-materi-kelas">
+                <option value="Kelas 7 SMP">Kelas 7 SMP</option>
+                <option value="Kelas 8 SMP" selected>Kelas 8 SMP</option>
+                <option value="Kelas 9 SMP">Kelas 9 SMP</option>
+                <option value="Fase E (Kelas 10 SMK/SMA)">Kelas 10 (Fase E)</option>
+                <option value="Fase F (Kelas 11 SMK/SMA)">Kelas 11 (Fase F)</option>
+                <option value="Fase F (Kelas 12 SMK/SMA)">Kelas 12 (Fase F)</option>
+                <option value="Umum">Tingkat Umum</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="select-materi-gaya">Gaya Pembahasan</label>
+            <select id="select-materi-gaya">
+              <option value="Komprehensif & Kasus" selected>Komprehensif &amp; Studi Kasus Nyata</option>
+              <option value="Ringkas & Padat">Ringkas &amp; Poin Kunci Penting</option>
+              <option value="Narasi Cerita Konseptual">Narasi Cerita Konseptual &amp; Analogi</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="input-materi-topik">Topik / Materi Pokok <span style="color: var(--accent-rose);">*</span></label>
+            <input type="text" id="input-materi-topik" placeholder="Contoh: Sistem Ekskresi: Struktur &amp; Fungsi Ginjal">
+          </div>
+
+          <div class="form-group">
+            <label for="input-materi-custom">Instruksi Khusus Guru (Opsional)</label>
+            <textarea id="input-materi-custom" rows="2" placeholder="Contoh: Berikan analogi filter air, sertakan 2 studi kasus kontekstual..."></textarea>
+          </div>
+
+          <!-- Pengaturan Ilustrasi Gambar AI Edukatif pada Materi -->
+          <div class="form-group" style="margin-top: 6px; margin-bottom: 8px;">
+            <label class="checkbox-label" style="cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">
+              <input type="checkbox" id="check-materi-include-image" checked>
+              <span>🎨 Sertakan Ilustrasi / Gambar Edukatif pada Materi</span>
+            </label>
+            <div id="materi-image-style-container" style="margin-top: 6px;">
+              <label for="select-materi-image-style" style="font-size: 11px; margin-bottom: 2px; color: var(--text-muted); display: block;">Gaya Visual Gambar:</label>
+              <select id="select-materi-image-style" class="form-control-sm">
+                <option value="AUTO" selected>🪄 Otomatis (Sesuaikan Konteks Materi BSKAP)</option>
+                <option value="REALISTIS">📷 Foto Realistis (Biologi, Geografi, IPA, Vokasi)</option>
+                <option value="DIAGRAM_TEKNIS">📐 Diagram Skematis / Vektor SVG (Teknik, Matematika, Fisika)</option>
+                <option value="KARTUN_3D">🧸 Visual 3D Edukatif (Konseptual, Menarik Siswa)</option>
+                <option value="FLAT_2D">🎨 Vektor 2D Flat / Infografis Bersih</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Opsi Penugasan & Distribusi Kelas -->
+          <div class="form-group" style="margin-top: 8px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;">
+            <label class="checkbox-label" style="cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">
+              <input type="checkbox" id="check-materi-penugasan" checked>
+              <span>Sertakan Pertanyaan Tugas Mandiri / Refleksi</span>
+            </label>
+            <label class="checkbox-label" style="cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">
+              <input type="checkbox" id="check-materi-ikut-global" checked>
+              <span>Otomatis Pasang Akses Semua Kelas (<code>ikut_global</code>)</span>
+            </label>
+          </div>
+
+          <!-- PENGATURAN JADWAL & BATAS WAKTU AFRESTO -->
+          <div class="materi-schedule-section" style="border-top: 1px solid var(--border-default); padding-top: 10px; margin-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">
+                📅 Jadwal &amp; Batas Waktu
+              </span>
+              <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">yyyy-mm-dd hh:ii</span>
+            </div>
+
+            <!-- Materi Mulai -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label for="input-materi-mulai" style="font-size: 11px; margin-bottom: 0;">Materi Dibuka (<code>materi_mulai</code>):</label>
+                <button type="button" id="btn-materi-mulai-sekarang" class="btn-xs btn-outline-primary" style="padding: 1px 6px; font-size: 10px;">
+                  ⚡ Sekarang
+                </button>
+              </div>
+              <input type="text" id="input-materi-mulai" class="form-control-sm" placeholder="yyyy-mm-dd hh:ii" style="font-family: monospace; font-size: 11.5px;">
+            </div>
+
+            <!-- Materi Ditutup -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label for="input-materi-ditutup" style="font-size: 11px; margin-bottom: 0;">Materi Ditutup (<code>materi_ditutup</code>):</label>
+                <label style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer; margin-bottom: 0;">
+                  <input type="checkbox" id="check-materi-tanpa-tutup" checked>
+                  <span>Tanpa Batas</span>
+                </label>
+              </div>
+              <input type="text" id="input-materi-ditutup" disabled value="(Buka terus tanpa batas waktu)" class="form-control-sm" placeholder="yyyy-mm-dd hh:ii (boleh kosong)" style="font-family: monospace; font-size: 11.5px; background: var(--bg-surface-elevated); color: var(--text-muted);">
+            </div>
+
+            <!-- Limit Penugasan -->
+            <div id="section-materi-limit" class="form-group" style="margin-bottom: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label for="input-materi-limit" style="font-size: 11px; margin-bottom: 0;">Batas Akhir Tugas (<code>limit_penugasan</code>):</label>
+                <div style="display: flex; gap: 3px;">
+                  <button type="button" id="btn-materi-deadline-3" class="btn-xs btn-secondary" style="padding: 1px 5px; font-size: 10px;">+3h</button>
+                  <button type="button" id="btn-materi-deadline-7" class="btn-xs btn-outline-primary" style="padding: 1px 5px; font-size: 10px; font-weight: 700;">+7h</button>
+                  <button type="button" id="btn-materi-deadline-14" class="btn-xs btn-secondary" style="padding: 1px 5px; font-size: 10px;">+14h</button>
+                </div>
+              </div>
+              <input type="text" id="input-materi-limit" class="form-control-sm" placeholder="yyyy-mm-dd hh:ii" style="font-family: monospace; font-size: 11.5px;">
+            </div>
+          </div>
+
+          <div id="materi-alert" class="alert hidden" style="margin-top: 10px;"></div>
+
+          <button type="button" id="btn-generate-materi" class="btn btn-primary btn-block btn-lg" style="margin-top: 12px;">
+            <span class="btn-text">✨ Rancang Materi Pembelajaran via AI</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </section>
+
+        <!-- KARTU HASIL PRATINJAU MATERI & INJEKSI OTOMATIS -->
+        <section id="materi-results-section" class="card hidden" style="border: 2px solid var(--border-focus); margin-top: 14px;">
+          <div class="results-header" style="border-bottom: 1px solid var(--border-default); padding-bottom: 8px; margin-bottom: 10px;">
+            <div class="results-title-group">
+              <h2 class="card-title">📄 Materi Siap Diinputkan</h2>
+              <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">🟢 Siap Input</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: var(--bg-surface-elevated); padding: 8px 10px; border-radius: var(--radius-item); border: 1px solid var(--border-default);">
+              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">
+                Target #nama (Judul):
+              </span>
+              <strong id="preview-materi-judul" style="font-size: 12px; color: var(--text-primary); line-height: 1.4; display: block;">
+                -
+              </strong>
+            </div>
+
+            <div style="background: var(--bg-surface-elevated); padding: 8px 10px; border-radius: var(--radius-item); border: 1px solid var(--border-default); max-height: 160px; overflow-y: auto;">
+              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px;">
+                Target #konten (Isi Artikel):
+              </span>
+              <div id="preview-materi-konten" style="font-size: 11.5px; color: var(--text-primary); line-height: 1.5;">
+                -
+              </div>
+            </div>
+
+            <div id="preview-materi-tugas-container" style="background: var(--bg-surface-elevated); padding: 8px 10px; border-radius: var(--radius-item); border: 1px solid var(--border-default);">
+              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 2px;">
+                Target #pertanyaan (Tugas Siswa):
+              </span>
+              <div id="preview-materi-tugas" style="font-size: 11.5px; color: var(--text-primary); white-space: pre-line; line-height: 1.4;">
+                -
+              </div>
+            </div>
+
+            <!-- Detail Jadwal Terkonfigurasi -->
+            <div id="preview-materi-jadwal-container" style="background: rgba(16, 185, 129, 0.08); padding: 8px 10px; border-radius: var(--radius-item); border: 1px solid rgba(16, 185, 129, 0.25); font-size: 11px;">
+              <strong style="color: var(--accent-emerald); display: block; margin-bottom: 4px;">📅 Jadwal Afresto Terpasang:</strong>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; color: var(--text-primary);">
+                <div>Mulai: <span id="preview-jadwal-mulai" style="font-family: monospace; font-weight: 600;">-</span></div>
+                <div>Tutup: <span id="preview-jadwal-tutup" style="color: var(--text-muted);">-</span></div>
+                <div>Batas Tugas: <span id="preview-jadwal-limit" style="font-family: monospace; font-weight: 600;">-</span></div>
+                <div>Akses: <span style="font-weight: 600;">Semua Rombel</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tombol Injeksi Hijau -->
+          <div style="margin-top: 12px;">
+            <button type="button" id="btn-inject-materi" class="btn btn-success btn-block btn-lg">
+              <span class="btn-text">📋 Masukkan Konten ke Form Afresto</span>
+              <span class="spinner hidden"></span>
+            </button>
+            <div style="text-align: center; margin-top: 6px;">
+              <span style="font-size: 10.5px; color: var(--text-muted); line-height: 1.4; display: block;">
+                Hanya mengisi judul, konten &amp; tugas ke formulir. Guru tetap bebas mengatur jadwal dan mengklik tombol Simpan sendiri di halaman Afresto.
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Studio Simulasi & Sandbox QC Guru (In-Page Modal) -->
+  <div id="modal-qc-studio" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-qc-title">
+    <div class="modal-card modal-card-fullscreen">
+      <div class="modal-header studio-modal-header">
+        <div class="studio-modal-title-group">
+          <span class="studio-modal-icon">🖥️</span>
+          <div>
+            <h3 id="modal-qc-title" class="modal-title">Studio Simulasi & Sandbox QC Guru</h3>
+            <p class="modal-subtitle">Uji coba interaktif siswa, telaah kunci AI, dan cetak naskah</p>
+          </div>
+        </div>
+        <div class="studio-modal-actions">
+          <button type="button" class="btn-modal-close" id="btn-close-qc-modal" title="Tutup Studio QC">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body studio-modal-body">
+        <iframe id="iframe-qc-studio" src="about:blank" class="studio-iframe" title="Studio QC Frame"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Edit Butir Soal Sebelum Diinput ke Sistem Afresto -->
+  <div id="modal-edit-question" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-edit-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-edit-title" class="modal-title">✏️ Edit Butir Soal</h3>
+        <button type="button" class="btn-modal-close" id="btn-close-edit-modal" title="Tutup">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-q-index" value="">
+        
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="edit-q-tipe" class="form-label" style="font-weight: 600; font-size: 12px;">Tipe Soal</label>
+          <select id="edit-q-tipe" class="form-control select-clean">
+            <option value="PG">Pilihan Ganda (PG)</option>
+            <option value="PG_KOMPLEKS">Pilihan Ganda Kompleks (Centang Banyak)</option>
+            <option value="BENAR_SALAH">Benar / Salah</option>
+            <option value="MENCOCOKKAN">Menjodohkan / Mencocokkan</option>
+            <option value="ISIAN">Isian Singkat</option>
+            <option value="URAIAN">Uraian / Essay</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="edit-q-level-kognitif" class="form-label" style="font-weight: 600; font-size: 12px;">Tingkat Kognitif (Taksonomi Bloom)</label>
+          <select id="edit-q-level-kognitif" class="form-control select-clean">
+            <option value="C1 (Mengingat)">C1 (Mengingat - LOTS)</option>
+            <option value="C2 (Memahami)">C2 (Memahami - LOTS)</option>
+            <option value="C3 (Aplikasi)">C3 (Aplikasi / Hitungan - MOTS)</option>
+            <option value="C4 (Analisis)">C4 (Analisis Data / Stimulus - HOTS)</option>
+            <option value="C5 (Evaluasi)">C5 (Evaluasi / Penilaian - HOTS)</option>
+            <option value="C6 (Kreasi)">C6 (Kreasi / Perancangan - HOTS)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="edit-q-pertanyaan" class="form-label" style="font-weight: 600; font-size: 12px;">Pertanyaan / Stimulus (Teks & HTML)</label>
+          <textarea id="edit-q-pertanyaan" class="form-control" rows="5" placeholder="Teks pertanyaan, tabel HTML, atau stimulus..."></textarea>
+          <div class="helper-text" style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+            Mendukung tag HTML &lt;b&gt;, &lt;i&gt;, &lt;sup&gt;, &lt;sub&gt;, serta tabel &lt;table class="afresto-exam-table"&gt;.
+          </div>
+        </div>
+
+        <!-- Dynamic Container Opsi Jawaban -->
+        <div id="edit-q-options-wrapper" class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" style="font-weight: 600; font-size: 12px;">Pilihan Jawaban</label>
+          <div id="edit-q-options-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Kunci Jawaban Input -->
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="edit-q-kunci" class="form-label" style="font-weight: 600; font-size: 12px;">Kunci Jawaban</label>
+          <input type="text" id="edit-q-kunci" class="form-control" placeholder="Misal: A atau C atau Benar,Salah">
+        </div>
+
+        <!-- Pembahasan -->
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label for="edit-q-pembahasan" class="form-label" style="font-weight: 600; font-size: 12px;">Pembahasan / Rasionalisasi (Opsional)</label>
+          <textarea id="edit-q-pembahasan" class="form-control" rows="2" placeholder="Pembahasan soal..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-default); background: var(--bg-surface-elevated);">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-edit">Batal</button>
+        <button type="button" class="btn btn-primary" id="btn-save-edit">💾 Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Ganti Sumber Soal (Proteksi Playlist) -->
+  <div id="modal-switch-mode-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-switch-title">
+    <div class="modal-card" style="max-width: 360px; padding: 0; overflow: hidden; border-radius: var(--radius-card); border: 1px solid var(--border-default); box-shadow: var(--shadow-card);">
+      <div class="modal-header" style="padding: 12px 16px; border-bottom: 1px solid var(--border-default); background: var(--bg-surface-elevated); display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="modal-switch-title" class="modal-title" style="font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+          <span>⚠️</span> Ganti Sumber Soal?
+        </h3>
+        <button type="button" class="btn-modal-close" id="btn-close-switch-modal" title="Batal">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px;">
+        <p style="font-size: 12.5px; margin-bottom: 8px; color: var(--text-primary); line-height: 1.4;">
+          Antrean Anda saat ini berisi <strong id="switch-modal-count" style="color: var(--accent-sky);">0 butir soal</strong>.
+        </p>
+        <p style="font-size: 11.5px; margin-bottom: 16px; color: var(--text-muted); line-height: 1.4;">
+          Apakah Anda ingin mengosongkan antrean untuk memulai dari awal, atau tetap mempertahankan soal yang sudah ada?
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button type="button" id="btn-switch-clear-playlist" class="btn-sm btn-danger-solid" style="width: 100%; justify-content: center; padding: 8px;">
+            🗑️ Kosongkan Antrean &amp; Ganti Mode
+          </button>
+          <button type="button" id="btn-switch-keep-playlist" class="btn-sm btn-primary" style="width: 100%; justify-content: center; padding: 8px;">
+            💾 Tetap Pertahankan Soal &amp; Ganti Mode
+          </button>
+          <button type="button" id="btn-switch-cancel" class="btn-sm btn-secondary" style="width: 100%; justify-content: center; padding: 8px;">
+            Batal
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input File Tersembunyi untuk Ganti Gambar Sendiri -->
+  <input type="file" id="input-replace-image" accept="image/*" style="display: none;">
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

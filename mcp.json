@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "browser-automation": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
+    }
+  }
+}

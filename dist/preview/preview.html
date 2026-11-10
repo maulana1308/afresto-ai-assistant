@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Studio Simulasi & Sandbox QC Guru - Afresto AI Assistant</title>
+  <link rel="stylesheet" href="preview.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-paper">
+  <!-- 1. Top Navigation Bar (Studio Chrome) -->
+  <header class="studio-navbar no-print">
+    <div class="nav-brand-section">
+      <div class="studio-logo" aria-hidden="true" style="overflow: hidden; padding: 0;">
+        <img src="../icons/icon48.png" alt="Afresto Mascot" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+      </div>
+      <div>
+        <div class="studio-title-row">
+          <h1 class="studio-title">Studio Simulasi & Sandbox QC Guru</h1>
+          <span class="badge-version">v3.0 Sovereign Engine</span>
+        </div>
+        <div class="studio-meta-row" id="studio-meta-summary">
+          <span id="badge-mapel" class="meta-pill">Memuat Mata Pelajaran...</span>
+          <span id="badge-kelas" class="meta-pill">Tingkat Kelas...</span>
+          <span id="badge-total-soal" class="meta-pill">0 Soal</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode Switcher (Segmented Control) -->
+    <div class="mode-segmented-control" role="tablist" aria-label="Mode Studio">
+      <button id="btn-mode-testdrive" class="mode-btn active" role="tab" aria-selected="true" title="Mode Siswa: Coba kerjakan soal layaknya siswa untuk mendeteksi kunci cacat">
+        <span class="mode-icon">🎮</span>
+        <span class="mode-label">Simulasi Siswa (Test-Drive)</span>
+      </button>
+      <button id="btn-mode-editor" class="mode-btn" role="tab" aria-selected="false" title="Mode Guru: Telaah kunci jawaban, edit teks langsung, dan atur butir soal">
+        <span class="mode-icon">🛠️</span>
+        <span class="mode-label">Telaah & Editor Guru</span>
+      </button>
+    </div>
+
+    <!-- Top Action Buttons -->
+    <div class="studio-actions">
+      <button id="btn-print-pdf" class="btn btn-secondary btn-icon-text" title="Cetak naskah soal atau simpan sebagai dokumen PDF">
+        <span>🖨️</span>
+        <span>Cetak / PDF</span>
+      </button>
+      <button id="btn-save-changes" class="btn btn-secondary btn-icon-text" title="Simpan perubahan editan ke penyimpanan lokal">
+        <span>💾</span>
+        <span>Simpan</span>
+      </button>
+      <button id="btn-inject-to-afresto" class="btn btn-primary btn-icon-text" title="Kirim seluruh paket soal terverifikasi ke halaman aktif Afresto">
+        <span>🚀</span>
+        <span>Suntikkan ke Afresto</span>
+      </button>
+      <button id="btn-toggle-theme" class="btn-icon-only" title="Ganti Tema (Kertas Hangat / Dark Slate)">
+        <span id="theme-icon">☀️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. Sticky Dashboard / Score Bar (Visible in Test-Drive Mode) -->
+  <aside id="testdrive-dashboard" class="testdrive-dashboard no-print">
+    <div class="dashboard-inner">
+      <div class="score-summary-group">
+        <div class="score-card">
+          <div class="score-card-label">Progress Pengerjaan</div>
+          <div class="score-card-value">
+            <span id="stat-answered" class="tabular-nums">0</span> / <span id="stat-total" class="tabular-nums">0</span>
+            <span class="score-card-sub" id="stat-percentage">(0%)</span>
+          </div>
+        </div>
+        <div class="score-card">
+          <div class="score-card-label">Skor Hasil Simulasi</div>
+          <div class="score-card-value highlight-score">
+            <span id="stat-score" class="tabular-nums">0</span><span class="score-unit">%</span>
+            <span class="score-card-sub" id="stat-match-count">(0 Cocok)</span>
+          </div>
+        </div>
+        <div class="score-card">
+          <div class="score-card-label">Verifikasi Kunci AI</div>
+          <div class="score-card-value">
+            <span id="stat-correct-pill" class="badge-stat badge-stat-success">0 ✓ Tepat</span>
+            <span id="stat-mismatch-pill" class="badge-stat badge-stat-warning">0 ⚠️ Meleset</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-actions">
+        <button id="btn-check-all-answers" class="btn btn-success btn-icon-text" title="Periksa kesesuaian seluruh jawaban simulasi dengan kunci AI">
+          <span>🔍</span>
+          <span>Periksa Seluruh Jawaban</span>
+        </button>
+        <button id="btn-reset-answers" class="btn btn-ghost btn-sm" title="Kosongkan jawaban simulasi siswa">
+          <span>🔄</span>
+          <span>Reset Jawaban</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 3. Teacher Quick Tool Belt (Visible in Editor Mode) -->
+  <aside id="editor-toolbar" class="editor-toolbar hidden no-print">
+    <div class="toolbar-inner">
+      <div class="toolbar-info">
+        <span class="toolbar-icon">💡</span>
+        <span><strong>Mode Telaah Guru:</strong> Anda dapat mengedit teks soal, mengganti stimulus gambar, mengatur kunci jawaban sekali-klik, atau men-generate ulang butir yang cacat.</span>
+      </div>
+      <div class="toolbar-options">
+        <button id="btn-import-docx-studio" class="btn btn-secondary btn-sm" title="Impor berkas bank soal Word (.docx) langsung ke studio">
+          <span>📄</span> Impor Word (.docx)
+        </button>
+        <input type="file" id="input-docx-studio" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;">
+        <label class="checkbox-inline">
+          <input type="checkbox" id="check-print-keys" checked>
+          <span>Sertakan Lembar Kunci di PDF</span>
+        </label>
+        <label class="checkbox-inline">
+          <input type="checkbox" id="check-show-explanations" checked>
+          <span>Tampilkan Pembahasan Soal</span>
+        </label>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 4. Main Exam Paper Document Sheet -->
+  <main class="studio-stage">
+    <div class="paper-sheet" id="exam-paper-sheet">
+      
+      <!-- School Exam Formal Header (KOP Naskah Ujian) -->
+      <section class="exam-header" id="exam-formal-header">
+        <div class="school-logo-col no-print-placeholder">
+          <div class="school-emblem" title="Klik untuk menyunting KOP Sekolah">🏛️</div>
+        </div>
+        <div class="school-text-col">
+          <div class="school-org" contenteditable="true" spellcheck="false" title="Klik untuk mengedit instansi/sekolah">PEMERINTAH DAERAH PROVINSI / YAYASAN PENDIDIKAN</div>
+          <div class="school-name" contenteditable="true" spellcheck="false" title="Klik untuk mengedit nama sekolah">SEKOLAH MENENGAH ATAS / KEJURUAN (SMA/SMK) NEGERI</div>
+          <div class="exam-title" contenteditable="true" spellcheck="false" title="Klik untuk mengedit judul asesmen">PENILAIAN AKHIR SEMESTER (PAS) / SUMATIF AKHIR SEMESTER (SAS)</div>
+          <div class="academic-year" contenteditable="true" spellcheck="false" title="Klik untuk mengedit tahun ajaran">TAHUN AJARAN 2026/2027</div>
+        </div>
+
+        <!-- Academic Info Grid Table -->
+        <div class="exam-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Mata Pelajaran</span>
+            <span class="meta-sep">:</span>
+            <span class="meta-value" id="kop-mapel" contenteditable="true" spellcheck="false">Mata Pelajaran</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Hari / Tanggal</span>
+            <span class="meta-sep">:</span>
+            <span class="meta-value" id="kop-hari-tanggal" contenteditable="true" spellcheck="false">Senin, 27 Oktober 2026</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Kelas / Fase</span>
+            <span class="meta-sep">:</span>
+            <span class="meta-value" id="kop-kelas" contenteditable="true" spellcheck="false">Fase E / Kelas 10</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Alokasi Waktu</span>
+            <span class="meta-sep">:</span>
+            <span class="meta-value" id="kop-waktu" contenteditable="true" spellcheck="false">90 Menit</span>
+          </div>
+        </div>
+
+        <!-- General Exam Instructions (Petunjuk Umum) -->
+        <div class="exam-instructions">
+          <strong>PETUNJUK UMUM:</strong>
+          <ol>
+            <li>Bacalah doa/basmalah sebelum memulai mengerjakan butir soal.</li>
+            <li>Periksa dan bacalah setiap stimulus dan butir soal dengan teliti sebelum menjawab.</li>
+            <li>Dahulukan menjawab butir-butir soal yang Anda anggap lebih mudah.</li>
+            <li>Periksa kembali seluruh lembar jawaban Anda sebelum diserahkan kepada pengawas.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Questions List Container -->
+      <section class="questions-container" id="questions-container">
+        <!-- Soal akan di-render secara dinamis di sini -->
+      </section>
+
+      <!-- Answer Key & Discussion Appendix (Lampiran Kunci Jawaban Resmi) -->
+      <section class="answer-key-section" id="answer-key-section">
+        <div class="page-break-indicator no-print">
+          <span>── Batas Halaman Cetak (Lampiran Kunci Jawaban Terpisah) ──</span>
+        </div>
+        <div class="appendix-header">
+          <h2 class="appendix-title">LAMPIRAN: KUNCI JAWABAN & PEDOMAN PENSKORAN</h2>
+          <p class="appendix-subtitle">Dokumen Resmi Pegangan Guru / Penguji (Terpisah dari Naskah Siswa)</p>
+        </div>
+        <table class="key-matrix-table" id="key-matrix-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">No</th>
+              <th style="width: 140px;">Tipe Butir</th>
+              <th style="width: 110px;">Level Kognitif</th>
+              <th style="width: 160px;">Kunci Jawaban Resmi</th>
+              <th>Pembahasan / Rubrik Penskoran</th>
+            </tr>
+          </thead>
+          <tbody id="key-matrix-tbody">
+            <!-- Diisi secara otomatis oleh preview.js -->
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </main>
+
+  <!-- Hidden File Input untuk Ganti Gambar di Preview -->
+  <input type="file" id="preview-file-input" accept="image/*" style="display: none;">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container no-print" aria-live="polite"></div>
+
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

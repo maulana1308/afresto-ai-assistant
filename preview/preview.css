@@ -1,0 +1,1496 @@
+/**
+ * Afresto AI Assistant - Studio Simulasi & Sandbox QC Guru CSS
+ * Tema: Humanist Warm Paper (Standard) & Dark Slate (Dual-Mode)
+ * Mengakomodasi tampilan layar penuh lega, interaksi pengerjaan siswa, dan cetak naskah PDF resmi sekolah.
+ */
+
+:root {
+  /* Humanist Warm Paper Palette */
+  --bg-canvas: #F4EFE6;
+  --bg-paper: #FAF8F5;
+  --bg-card: #FFFFFF;
+  --bg-card-subtle: #F6F3EE;
+  --bg-chrome: rgba(250, 248, 245, 0.94);
+  
+  --text-primary: #2B2520;
+  --text-secondary: #574F47;
+  --text-muted: #82786F;
+  --text-inverted: #FFFFFF;
+
+  --border-subtle: #E8E2D8;
+  --border-default: #DCD4C7;
+  --border-strong: #A89C8B;
+  --border-focus: #B45309;
+
+  --accent-amber: #B45309;
+  --accent-amber-hover: #92400E;
+  --accent-amber-light: rgba(180, 83, 9, 0.09);
+
+  --accent-emerald: #15803D;
+  --accent-emerald-light: rgba(21, 128, 61, 0.09);
+
+  --accent-ruby: #B91C1C;
+  --accent-ruby-light: rgba(185, 28, 28, 0.08);
+
+  --accent-sky: #0369A1;
+  --accent-sky-light: rgba(3, 105, 161, 0.09);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgba(43, 37, 32, 0.04);
+  --shadow-md: 0 4px 12px rgba(43, 37, 32, 0.06), 0 1px 3px rgba(43, 37, 32, 0.03);
+  --shadow-paper: 0 12px 36px rgba(43, 37, 32, 0.08), 0 2px 6px rgba(43, 37, 32, 0.04);
+  --shadow-docked: 0 -4px 16px rgba(43, 37, 32, 0.06);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', var(--font-sans);
+  --font-serif: 'Amiri', Georgia, "Times New Roman", serif;
+  --font-mono: 'Space Grotesk', ui-monospace, Menlo, monospace;
+}
+
+/* Dark Slate Theme */
+body.theme-dark {
+  --bg-canvas: #121417;
+  --bg-paper: #1A1D21;
+  --bg-card: #22262C;
+  --bg-card-subtle: #292E36;
+  --bg-chrome: rgba(26, 29, 33, 0.94);
+
+  --text-primary: #F3F4F6;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --text-inverted: #121417;
+
+  --border-subtle: #2A303A;
+  --border-default: #374151;
+  --border-strong: #4B5563;
+  --border-focus: #F59E0B;
+
+  --accent-amber: #F59E0B;
+  --accent-amber-hover: #D97706;
+  --accent-amber-light: rgba(245, 158, 11, 0.14);
+
+  --accent-emerald: #10B981;
+  --accent-emerald-light: rgba(16, 185, 129, 0.14);
+
+  --accent-ruby: #EF4444;
+  --accent-ruby-light: rgba(239, 68, 68, 0.14);
+
+  --accent-sky: #38BDF8;
+  --accent-sky-light: rgba(56, 189, 248, 0.14);
+
+  --shadow-paper: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   1. STUDIO NAVBAR & TOP CHROME
+   ========================================================================== */
+.studio-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-chrome);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-default);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.nav-brand-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.studio-logo {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, var(--accent-amber), var(--accent-amber-hover));
+  color: #FFFFFF;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.25);
+}
+
+.studio-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.badge-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-emerald-light);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.studio-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.meta-pill {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+/* Mode Segmented Controls */
+.mode-segmented-control {
+  display: inline-flex;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-default);
+  padding: 3px;
+  border-radius: var(--radius-lg);
+  gap: 2px;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.mode-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-amber);
+  box-shadow: 0 1px 3px rgba(43, 37, 32, 0.08);
+}
+
+body.theme-dark .mode-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-amber);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Top Action Buttons */
+.studio-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent-amber);
+  color: #FFFFFF;
+  border-color: var(--accent-amber);
+}
+
+.btn-primary:hover {
+  background: var(--accent-amber-hover);
+  border-color: var(--accent-amber-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-subtle);
+  border-color: var(--border-strong);
+}
+
+.btn-success {
+  background: var(--accent-emerald);
+  color: #FFFFFF;
+  border-color: var(--accent-emerald);
+}
+
+.btn-success:hover {
+  background: #166534;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+
+.btn-ghost:hover {
+  background: var(--bg-card-subtle);
+  color: var(--text-primary);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.btn-xs {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.btn-icon-only {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.btn-icon-only:hover {
+  background: var(--bg-card-subtle);
+  border-color: var(--border-strong);
+}
+
+/* ==========================================================================
+   2. STICKY TEST-DRIVE DASHBOARD / SCORE BAR
+   ========================================================================== */
+.testdrive-dashboard {
+  position: sticky;
+  top: 59px;
+  z-index: 90;
+  background: var(--bg-paper);
+  border-bottom: 1px solid var(--border-default);
+  padding: 8px 24px;
+  box-shadow: 0 4px 10px rgba(43, 37, 32, 0.03);
+  transition: all 0.25s ease;
+}
+
+.dashboard-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.score-summary-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.score-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.score-card-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.score-card-value {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.score-card-value.highlight-score {
+  color: var(--accent-amber);
+  font-size: 18px;
+}
+
+.score-unit {
+  font-size: 12px;
+}
+
+.score-card-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.badge-stat {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.badge-stat-success {
+  background: var(--accent-emerald-light);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+}
+
+.badge-stat-warning {
+  background: var(--accent-ruby-light);
+  color: var(--accent-ruby);
+  border: 1px solid rgba(185, 28, 28, 0.25);
+}
+
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Teacher Quick Tool Belt */
+.editor-toolbar {
+  position: sticky;
+  top: 59px;
+  z-index: 90;
+  background: var(--accent-amber-light);
+  border-bottom: 1px solid rgba(180, 83, 9, 0.2);
+  padding: 8px 24px;
+}
+
+.toolbar-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+}
+
+.toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.toolbar-options {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.checkbox-inline input {
+  accent-color: var(--accent-amber);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   3. FORMAL EXAM PAPER SHEET (KOP UJIAN & STAGE)
+   ========================================================================== */
+.studio-stage {
+  flex: 1;
+  padding: 32px 20px 80px;
+  display: flex;
+  justify-content: center;
+}
+
+.paper-sheet {
+  width: 100%;
+  max-width: 920px;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-paper);
+  padding: 40px 48px;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Formal School Exam Header (KOP Soal) */
+.exam-header {
+  border-bottom: 3px double var(--border-strong);
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.school-text-col {
+  text-align: center;
+}
+
+.school-org {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.school-name {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 2px 0;
+  text-transform: uppercase;
+}
+
+.exam-title {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.academic-year {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.exam-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 20px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: baseline;
+}
+
+.meta-label {
+  width: 105px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.meta-sep {
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+
+.meta-value {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  outline: none;
+}
+
+.meta-value:focus {
+  background: rgba(180, 83, 9, 0.08);
+  border-radius: 2px;
+}
+
+.exam-instructions {
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border-strong);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.exam-instructions ol {
+  padding-left: 18px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   4. QUESTION ITEM CARDS & INTERACTIVE ENGINE
+   ========================================================================== */
+.questions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.q-studio-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.q-studio-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.q-studio-card.status-verified {
+  border-left: 4px solid var(--accent-emerald);
+}
+
+.q-studio-card.status-mismatch {
+  border-left: 4px solid var(--accent-ruby);
+  background: rgba(185, 28, 28, 0.015);
+}
+
+/* Card Header */
+.q-studio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border-subtle);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.q-studio-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-num-pill {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 800;
+  background: var(--text-primary);
+  color: var(--bg-card);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.q-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.q-type-pg { background: rgba(3, 105, 161, 0.1); color: var(--accent-sky); border: 1px solid rgba(3, 105, 161, 0.2); }
+.q-type-pg_kompleks { background: rgba(124, 58, 237, 0.1); color: #7C3AED; border: 1px solid rgba(124, 58, 237, 0.2); }
+.q-type-benar_salah { background: rgba(217, 119, 6, 0.1); color: #D97706; border: 1px solid rgba(217, 119, 6, 0.2); }
+.q-type-mencocokkan { background: rgba(5, 150, 105, 0.1); color: #059669; border: 1px solid rgba(5, 150, 105, 0.2); }
+.q-type-isian { background: rgba(14, 165, 233, 0.1); color: #0EA5E9; border: 1px solid rgba(14, 165, 233, 0.2); }
+.q-type-uraian { background: rgba(100, 116, 139, 0.1); color: #64748B; border: 1px solid rgba(100, 116, 139, 0.2); }
+
+.q-kognitif-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+
+.q-studio-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Stimulus & Image Box */
+.q-studio-image-box {
+  margin: 14px 0;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  text-align: center;
+}
+
+.q-studio-image {
+  max-width: 100%;
+  max-height: 380px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  object-fit: contain;
+}
+
+.q-studio-svg-container {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.q-image-control-bar {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Question Body Narrative */
+.q-studio-body {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.q-studio-body table,
+.q-studio-body .afresto-exam-table {
+  white-space: normal !important;
+}
+
+.q-studio-body[contenteditable="true"] {
+  padding: 8px;
+  background: rgba(180, 83, 9, 0.04);
+  border: 1px dashed var(--accent-amber);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+/* Multilingual Typography */
+.q-rtl {
+  direction: rtl !important;
+  text-align: right !important;
+  font-family: var(--font-serif) !important;
+  font-size: 17px !important;
+  line-height: 2 !important;
+}
+
+.q-cjk {
+  font-family: 'Noto Sans JP', sans-serif !important;
+  letter-spacing: 0.03em;
+}
+
+.q-javanese {
+  font-family: 'Amiri', 'Times New Roman', serif !important;
+}
+
+/* ==========================================================================
+   5. INTERACTIVE ANSWER OPTIONS (TEST-DRIVE SIMULATION)
+   ========================================================================== */
+.interactive-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* Option Pill (PG & PG Kompleks) */
+.testdrive-option-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.testdrive-option-item:hover {
+  background: var(--bg-card-subtle);
+  border-color: var(--border-strong);
+}
+
+.testdrive-option-item.selected {
+  background: var(--accent-amber-light);
+  border-color: var(--accent-amber);
+  box-shadow: 0 1px 3px rgba(180, 83, 9, 0.12);
+}
+
+.testdrive-option-item.is-correct-key {
+  border-color: var(--accent-emerald);
+}
+
+.testdrive-option-item.is-wrong-picked {
+  border-color: var(--accent-ruby);
+  background: var(--accent-ruby-light);
+}
+
+.testdrive-key-letter {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: all 0.18s ease;
+}
+
+.testdrive-option-item.selected .testdrive-key-letter {
+  background: var(--accent-amber);
+  color: #FFFFFF;
+  border-color: var(--accent-amber);
+}
+
+.testdrive-option-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.testdrive-option-text[contenteditable="true"] {
+  outline: none;
+}
+
+.testdrive-option-text[contenteditable="true"]:focus {
+  background: rgba(180, 83, 9, 0.06);
+  border-radius: 2px;
+}
+
+/* Benar / Salah Interactive Table */
+.interactive-bs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.interactive-bs-table th {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-default);
+  padding: 8px 12px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.interactive-bs-table td {
+  border: 1px solid var(--border-default);
+  padding: 10px 12px;
+}
+
+.bs-statement-text {
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.bs-btn-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.bs-toggle-btn {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bs-toggle-btn.active-benar {
+  background: var(--accent-emerald);
+  color: #FFFFFF;
+  border-color: var(--accent-emerald);
+}
+
+.bs-toggle-btn.active-salah {
+  background: var(--accent-ruby);
+  color: #FFFFFF;
+  border-color: var(--accent-ruby);
+}
+
+/* Mencocokkan Two-Tone Matrix */
+.interactive-match-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.interactive-match-table th {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-default);
+  padding: 8px 12px;
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.interactive-match-table td {
+  border: 1px solid var(--border-default);
+  padding: 10px 12px;
+}
+
+.match-premise-col {
+  width: 50%;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.match-target-col {
+  width: 50%;
+  background: var(--bg-card-subtle);
+}
+
+.match-select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+  cursor: pointer;
+}
+
+.match-select:focus {
+  border-color: var(--accent-amber);
+}
+
+/* Isian Singkat & Uraian */
+.interactive-input-box {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+  margin-bottom: 14px;
+}
+
+.interactive-input-box:focus {
+  border-color: var(--accent-amber);
+  box-shadow: 0 0 0 2px rgba(180, 83, 9, 0.15);
+}
+
+textarea.interactive-input-box {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* ==========================================================================
+   6. VERIFICATION FEEDBACK PANEL & 1-CLICK SAFEGUARDS
+   ========================================================================== */
+.q-studio-feedback-panel {
+  margin-top: 14px;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-card-subtle);
+  animation: fadeIn 0.2s ease;
+}
+
+.feedback-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.feedback-pill {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.feedback-pill.match {
+  background: var(--accent-emerald-light);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(21, 128, 61, 0.3);
+}
+
+.feedback-pill.mismatch {
+  background: var(--accent-ruby-light);
+  color: var(--accent-ruby);
+  border: 1px solid rgba(185, 28, 28, 0.3);
+}
+
+.feedback-details {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.feedback-ai-key {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.feedback-explanation {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-default);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* 1-Click Key Correction Bar */
+.safeguard-action-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-set-key {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #F59E0B;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-set-key:hover {
+  background: #FDE68A;
+  border-color: #D97706;
+}
+
+body.theme-dark .btn-set-key {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FCD34D;
+  border-color: #F59E0B;
+}
+
+.btn-regen-item {
+  background: var(--bg-card);
+  color: var(--accent-sky);
+  border: 1px solid rgba(3, 105, 161, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-regen-item:hover {
+  background: var(--accent-sky-light);
+}
+
+/* ==========================================================================
+   7. ANSWER KEY & DISCUSSION APPENDIX (LAMPIRAN RESMI GURU)
+   ========================================================================== */
+.answer-key-section {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 2px dashed var(--border-default);
+}
+
+.appendix-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.appendix-title {
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+
+.appendix-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.key-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.key-matrix-table th {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-default);
+  padding: 8px 10px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.key-matrix-table td {
+  border: 1px solid var(--border-default);
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.key-badge-mono {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  background: var(--accent-emerald-light);
+  color: var(--accent-emerald);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+.page-break-indicator {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  font-style: italic;
+}
+
+/* ==========================================================================
+   8. TOAST NOTIFICATIONS
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 380px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: var(--shadow-paper);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
+}
+
+.toast-success {
+  background: #14532D;
+  color: #FFFFFF;
+  border: 1px solid #15803D;
+}
+
+.toast-info {
+  background: #1E293B;
+  color: #FFFFFF;
+  border: 1px solid #334155;
+}
+
+.toast-warning {
+  background: #78350F;
+  color: #FFFFFF;
+  border: 1px solid #B45309;
+}
+
+/* Utility Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hidden {
+  display: none !important;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   9. PRINT-OPTIMIZED STYLESHEET (@media print)
+   ========================================================================== */
+@media print {
+  /* Sembunyikan seluruh kontrol UI, navbar, dashboard, tombol aksi, dan badge bantuan */
+  .no-print,
+  .no-print-placeholder,
+  .studio-navbar,
+  .testdrive-dashboard,
+  .editor-toolbar,
+  .q-studio-card-actions,
+  .q-image-control-bar,
+  .safeguard-action-row,
+  .q-studio-feedback-panel,
+  .page-break-indicator,
+  .toast-container {
+    display: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  /* Reset layout kanvas untuk kertas cetak A4 / Folio murni */
+  html, body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+  }
+
+  .studio-stage {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .paper-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    background: #FFFFFF !important;
+  }
+
+  .exam-header {
+    border-bottom: 2pt solid #000000 !important;
+    margin-bottom: 14pt !important;
+    padding-bottom: 6pt !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .exam-meta-grid {
+    background: transparent !important;
+    border: 1pt solid #000000 !important;
+    border-radius: 0 !important;
+  }
+
+  .exam-instructions {
+    border-left: 2pt solid #000000 !important;
+    background: transparent !important;
+  }
+
+  /* Butir Soal Cetak: Alirkan secara alami antar-halaman tanpa memicu lompatan halaman kosong */
+  .q-studio-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 16pt !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    border-left: none !important;
+    background: transparent !important;
+  }
+
+  .q-studio-header {
+    border-bottom: none !important;
+    margin-bottom: 4pt !important;
+    padding-bottom: 0 !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .q-studio-body {
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
+    color: #000000 !important;
+    margin-bottom: 8pt !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  .q-num-pill {
+    background: #000000 !important;
+    color: #FFFFFF !important;
+    width: 18pt !important;
+    height: 18pt !important;
+    font-size: 9pt !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .q-type-badge,
+  .q-kognitif-badge {
+    border: 1pt solid #000000 !important;
+    background: transparent !important;
+    color: #000000 !important;
+    font-size: 8pt !important;
+  }
+
+  .q-studio-image-box {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 6pt 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .q-studio-image {
+    max-height: 200pt !important;
+    box-shadow: none !important;
+  }
+
+  .testdrive-option-item {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 2pt 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .testdrive-key-letter {
+    border: 1pt solid #000000 !important;
+    background: transparent !important;
+    color: #000000 !important;
+    width: 16pt !important;
+    height: 16pt !important;
+    font-size: 9pt !important;
+  }
+
+  .interactive-bs-table,
+  .interactive-match-table,
+  .key-matrix-table,
+  .afresto-exam-table {
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  .interactive-bs-table tr,
+  .interactive-match-table tr,
+  .key-matrix-table tr,
+  .afresto-exam-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .interactive-bs-table th,
+  .interactive-bs-table td,
+  .interactive-match-table th,
+  .interactive-match-table td,
+  .key-matrix-table th,
+  .key-matrix-table td {
+    border: 1pt solid #000000 !important;
+    background: transparent !important;
+    color: #000000 !important;
+    padding: 4pt 6pt !important;
+  }
+
+  .bs-toggle-btn {
+    border: 1pt solid #000000 !important;
+    background: transparent !important;
+    color: #000000 !important;
+  }
+
+  /* Lampiran Kunci Jawaban di Halaman Baru */
+  .answer-key-section {
+    page-break-before: always !important;
+    break-before: page !important;
+    border-top: none !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  .key-badge-mono {
+    border: 1pt solid #000000 !important;
+    background: transparent !important;
+    color: #000000 !important;
+  }
+}
+
+/* Tipografi Pangkat & Indeks Kimia/Matematika Studio Preview */
+sup,
+.testdrive-option-text sup,
+.q-studio-body sup,
+.bs-statement-text sup {
+  font-size: 0.78em;
+  vertical-align: 0.42em;
+  line-height: 0;
+  font-weight: 600;
+  display: inline-block;
+}
+
+sub,
+.testdrive-option-text sub,
+.q-studio-body sub,
+.bs-statement-text sub {
+  font-size: 0.78em;
+  vertical-align: -0.28em;
+  line-height: 0;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* ========================================================================
+   10. RESPONSIVE MULTI-RESOLUTION SUITE FOR STUDIO QC
+   ======================================================================== */
+@media (max-width: 900px) {
+  .studio-navbar {
+    padding: 8px 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .nav-brand-section {
+    flex: 1;
+    min-width: 220px;
+  }
+  .mode-segmented-control {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .studio-actions {
+    order: 2;
+  }
+  .paper-sheet {
+    padding: 24px 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .studio-actions .btn-icon-text span:last-child {
+    display: none;
+  }
+  .studio-actions .btn {
+    padding: 6px 10px;
+  }
+  .mode-btn .mode-label {
+    font-size: 11.5px;
+  }
+  .paper-sheet {
+    padding: 16px 12px;
+    border-radius: var(--radius-md);
+  }
+  .exam-header {
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+}

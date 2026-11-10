@@ -1,0 +1,72 @@
+==================================================================
+   PANDUAN CARA PAKAI AFRESTO AI ASSISTANT UNTUK BAPAK/IBU GURU
+==================================================================
+
+Selamat datang! Ekstensi ini dibuat khusus untuk mempermudah Bapak/Ibu Guru
+dalam menyusun butir soal ujian dan menginputkannya ke portal Afresto
+secara otomatis dalam hitungan detik.
+
+------------------------------------------------------------------
+LANGKAH 1: CARA MEMASANG EKSTENSI KE GOOGLE CHROME (CUKUP 1 KALI)
+------------------------------------------------------------------
+1. Ekstrak file ZIP ini ke komputer/laptop Anda:
+   (Klik kanan file ZIP -> Pilih "Extract All" / "Ekstrak Semua").
+2. Buka browser Google Chrome, lalu ketik alamat ini di bilah atas:
+   👉 chrome://extensions
+   (lalu tekan Enter pada keyboard).
+3. Di pojok kanan atas layar, aktifkan saklar:
+   👉 "Developer mode" (Mode Pengembang) hingga berwarna biru/ON.
+4. Di pojok kiri atas layar, klik tombol:
+   👉 "Load unpacked" (Muat yang belum dibongkar).
+5. Pilih folder hasil ekstrak tadi (folder yang berisi manifest.json), lalu klik "Select Folder".
+6. Selesai! Ekstensi "Afresto AI Assistant" sudah aktif permanen di browser Anda.
+
+------------------------------------------------------------------
+LANGKAH 2: CARA PENGGUNAAN SEHARI-HARI
+------------------------------------------------------------------
+1. Buka halaman portal Afresto sekolah Anda di Google Chrome.
+2. Login ke akun guru seperti biasa (email & data Anda tetap aman).
+3. Masuk ke menu input butir soal:
+   👉 Evaluasi -> Butir Soal -> Klik "Tulis Soal Baru"
+4. Buka panel Afresto AI Assistant di samping layar:
+   (Klik ikon puzzle/ekstensi di pojok kanan atas browser, lalu pilih "Afresto AI Assistant").
+   *Tips: Klik ikon pin 📌 agar logo Afresto selalu terlihat di bilah atas browser.
+5. Pilih sumber soal:
+   - Impor Naskah Word (.docx): Masukkan file kisi-kisi soal Word Anda.
+   - Generate via AI Gemini: Buat paket soal otomatis berdasarkan materi & TP.
+6. Klik "🚀 Input Otomatis ke Afresto", dan biarkan asisten bekerja mengisikan
+   seluruh soal, kunci jawaban, rumus, dan gambar langsung ke sistem!
+
+------------------------------------------------------------------
+LANGKAH 3: CARA MEMPERBARUI (UPDATE) JIKA ADA VERSI BARU
+------------------------------------------------------------------
+1. Buka folder ekstensi ini di laptop Anda.
+2. Klik 2x file:
+   👉 UPDATE_APLIKASI.bat
+3. Tunggu 2-3 detik hingga proses unduh selesai.
+4. Buka Google Chrome -> ketik chrome://extensions
+5. Klik tombol REFRESH (ikon panah melingkar 🔄) pada kartu Afresto AI Assistant.
+6. Selesai! Versi terbaru langsung aktif tanpa perlu setting ulang.
+
+------------------------------------------------------------------
+PERTANYAAN UMUM (FAQ):
+------------------------------------------------------------------
+Q: Apakah saya perlu mengulang proses instalasi setiap kali buka laptop?
+A: TIDAK PERLU. Sekali dipasang di Chrome, ekstensi akan terus aktif selamanya.
+
+Q: Apakah saya perlu login ulang email Google / Belajar.id?
+A: TIDAK PERLU. Browser Chrome tetap menggunakan profil pribadi Anda yang asli.
+   Seluruh data email, bookmark, dan password tetap utuh dan tersimpan.
+
+Q: Apakah butuh Kunci API (API Key)?
+A: Jika Bapak/Ibu hanya mengimpor naskah soal dari Word (.docx), API Key
+   TIDAK DIBUTUHKAN. API Key hanya dibutuhkan jika ingin meminta AI membuatkan
+   soal baru secara otomatis dari nol (dapat diperoleh gratis di aistudio.google.com).
+
+------------------------------------------------------------------
+BUKU PANDUAN LENGKAP & BERGAMBAR (FORMAT PDF):
+------------------------------------------------------------------
+Bapak/Ibu juga dapat membaca dan mencetak buku panduan resmi:
+👉 PANDUAN_TUTORIAL_AFRESTO_AI.pdf
+(Tersedia di dalam folder ini dan bisa diunduh langsung dari ekstensi).
+==================================================================

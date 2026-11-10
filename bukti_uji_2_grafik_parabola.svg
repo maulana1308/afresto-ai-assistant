@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 350" width="100%" height="100%" style="background: #ffffff; font-family: Arial, sans-serif;">
+  <defs>
+    <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#f0f3f6" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid)" />
+  
+  <!-- Sumbu Koordinat X dan Y -->
+  <line x1="80" y1="300" x2="560" y2="300" stroke="#1e293b" stroke-width="2.5"/>
+  <line x1="120" y1="320" x2="120" y2="40" stroke="#1e293b" stroke-width="2.5"/>
+  
+  <!-- Panah Sumbu -->
+  <polygon points="560,295 575,300 560,305" fill="#1e293b"/>
+  <polygon points="115,40 120,25 125,40" fill="#1e293b"/>
+  
+  <!-- Label Sumbu -->
+  <text x="565" y="325" font-size="14" font-weight="bold" fill="#1e293b">x (Unit)</text>
+  <text x="50" y="45" font-size="14" font-weight="bold" fill="#1e293b">C(x)</text>
+  <text x="105" y="320" font-size="13" fill="#64748b">0</text>
+  
+  <!-- Kurva Parabola C(x) = 2x^2 - 120x + 2500 -->
+  <path d="M 160,60 Q 320,340 480,60" fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Garis Proyeksi Putus-putus ke Puncak Minimum -->
+  <line x1="120" y1="200" x2="320" y2="200" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,6"/>
+  <line x1="320" y1="200" x2="320" y2="300" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,6"/>
+  
+  <!-- Titik Puncak (Marker Lingkaran Merah) -->
+  <circle cx="320" cy="200" r="7" fill="#dc2626" stroke="#ffffff" stroke-width="2"/>
+  
+  <!-- Label Titik Puncak dan Nilai Koordinat -->
+  <text x="335" y="195" font-size="14" font-weight="bold" fill="#dc2626">Titik Puncak (Minimum)</text>
+  <text x="305" y="325" font-size="14" font-weight="bold" fill="#0284c7">x = 30</text>
+  <text x="55" y="205" font-size="13" font-weight="bold" fill="#64748b">700 rb</text>
+  
+  <!-- Keterangan Rumus Fungsi Matematika -->
+  <rect x="350" y="70" width="220" height="45" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="360" y="98" font-size="13" font-weight="bold" fill="#0f172a">C(x) = 2x² - 120x + 2500</text>
+</svg>
