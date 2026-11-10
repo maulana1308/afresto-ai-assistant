@@ -110,29 +110,29 @@ def build_banner(mascot_img, out_paths):
     # Typography
     draw = ImageDraw.Draw(banner)
     try:
-        font_hi = ImageFont.truetype('segoeuib.ttf', 18)
+        font_hi = ImageFont.truetype('segoeuib.ttf', 17)
         font_name = ImageFont.truetype('segoeuib.ttf', 24)
         font_sub = ImageFont.truetype('segoeuib.ttf', 14)
-        font_badge = ImageFont.truetype('segoeui.ttf', 11)
+        font_badge = ImageFont.truetype('segoeuib.ttf', 11)
         font_desc = ImageFont.truetype('segoeui.ttf', 12)
     except:
-        font_hi = ImageFont.truetype('arialbd.ttf', 18)
+        font_hi = ImageFont.truetype('arialbd.ttf', 17)
         font_name = ImageFont.truetype('arialbd.ttf', 24)
         font_sub = ImageFont.truetype('arialbd.ttf', 14)
-        font_badge = ImageFont.truetype('arial.ttf', 11)
+        font_badge = ImageFont.truetype('arialbd.ttf', 11)
         font_desc = ImageFont.truetype('arial.ttf', 12)
 
     text_x = max(target_w + 14, 228)
     
-    # Top greetings (visible within standard 110px sidepanel view)
-    draw.text((text_x, 10), "Hai!", font=font_hi, fill=(16, 140, 60, 255))
+    # Natural Indonesian greeting for teachers (no awkward translations)
+    draw.text((text_x, 10), "Halo, Bapak & Ibu Guru!", font=font_hi, fill=(16, 140, 60, 255))
     draw.text((text_x + 1, 31), "Aku AFRESTO!", font=font_name, fill=(217, 119, 6, 60))
     draw.text((text_x, 30), "Aku AFRESTO!", font=font_name, fill=(13, 110, 48, 255))
-    draw.text((text_x, 60), "Semangat bertemu", font=font_sub, fill=(21, 128, 61, 255))
-    draw.text((text_x, 78), "denganmu!! ✨", font=font_sub, fill=(21, 128, 61, 255))
+    draw.text((text_x, 60), "Siap bantu siapkan", font=font_sub, fill=(21, 128, 61, 255))
+    draw.text((text_x, 78), "soal & materi ajar!", font=font_sub, fill=(21, 128, 61, 255))
     
-    # Badge Pill
-    pill_w = 170
+    # Badge Pill (drawn diamond vector icon to eliminate emoji tofu [ ] box)
+    pill_w = 165
     pill_h = 24
     pill_y = 104
     pill_img = Image.new('RGBA', (width, height), (0,0,0,0))
@@ -144,13 +144,18 @@ def build_banner(mascot_img, out_paths):
         outline=(244, 180, 0, 190), 
         width=1
     )
+    # Golden diamond vector icon
+    dc_x = text_x + 12
+    dc_y = pill_y + 12
+    d_sz = 4
+    pdraw.polygon([(dc_x, dc_y - d_sz), (dc_x + d_sz, dc_y), (dc_x, dc_y + d_sz), (dc_x - d_sz, dc_y)], fill=(217, 119, 6, 255))
     banner = Image.alpha_composite(banner, pill_img)
     
     draw = ImageDraw.Draw(banner)
-    draw.text((text_x + 10, pill_y + 4), "🦊 Maskot Sahabat Guru", font=font_badge, fill=(180, 83, 9, 255))
+    draw.text((text_x + 22, pill_y + 4), "Sahabat Mengajar Anda", font=font_badge, fill=(180, 83, 9, 255))
     
-    # Bottom secondary text (visible when banner is expanded or in full asset view)
-    draw.text((text_x, 144), "Mitra Cerdas Pembuat Soal & Materi", font=font_desc, fill=(100, 116, 139, 210))
+    # Bottom secondary text (visible when banner is expanded)
+    draw.text((text_x, 144), "Otomatisasi Soal & Bahan Pembelajaran", font=font_desc, fill=(100, 116, 139, 210))
     draw.text((text_x, 164), "Terintegrasi LMS Afresto CBT", font=font_desc, fill=(148, 163, 184, 200))
     
     for p in out_paths:
