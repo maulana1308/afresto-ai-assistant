@@ -124,8 +124,79 @@ const apiKeyStatusBadge = document.getElementById('api-key-status-badge');
 let isGenerating = false;
 
 // ------------------------------------------------------------------------
-// 1. INISIALISASI & PERSISTENSI KUNCI API
+// 1. SISTEM PERSISTENSI OTOMATIS FORM SOAL ASESMEN & KUNCI API
 // ------------------------------------------------------------------------
+
+async function saveSoalFormState() {
+  const state = {
+    mapel: inputMapel?.value || "",
+    kelas: selectKelas?.value || "",
+    tp: inputTp?.value || "",
+    materi: inputMateri?.value || "",
+    prompt: inputPrompt?.value || "",
+    kognitif: selectKognitif?.value || "C2",
+    includeImage: checkIncludeImage ? checkIncludeImage.checked : true,
+    imageStyle: selectImageStyle?.value || "AUTO",
+    checkPg: checkPg ? checkPg.checked : true,
+    qtyPg: qtyPg?.value || "5",
+    checkPgKompleks: checkPgKompleks ? checkPgKompleks.checked : false,
+    qtyPgKompleks: qtyPgKompleks?.value || "3",
+    checkBenarSalah: checkBenarSalah ? checkBenarSalah.checked : false,
+    qtyBenarSalah: qtyBenarSalah?.value || "2",
+    checkMencocokkan: checkMencocokkan ? checkMencocokkan.checked : false,
+    qtyMencocokkan: qtyMencocokkan?.value || "2",
+    checkIsian: checkIsian ? checkIsian.checked : false,
+    qtyIsian: qtyIsian?.value || "2",
+    checkUraian: checkUraian ? checkUraian.checked : false,
+    qtyUraian: qtyUraian?.value || "1"
+  };
+  await chrome.storage.local.set({ afresto_soal_form_state: state });
+}
+
+async function restoreSoalFormState() {
+  const data = await chrome.storage.local.get('afresto_soal_form_state');
+  if (!data.afresto_soal_form_state) return;
+  const s = data.afresto_soal_form_state;
+  if (inputMapel && s.mapel !== undefined && !inputMapel.value) inputMapel.value = s.mapel;
+  if (selectKelas && s.kelas !== undefined) selectKelas.value = s.kelas;
+  if (inputTp && s.tp !== undefined) inputTp.value = s.tp;
+  if (inputMateri && s.materi !== undefined) inputMateri.value = s.materi;
+  if (inputPrompt && s.prompt !== undefined) inputPrompt.value = s.prompt;
+  if (selectKognitif && s.kognitif !== undefined) selectKognitif.value = s.kognitif;
+  if (checkIncludeImage && s.includeImage !== undefined) {
+    checkIncludeImage.checked = s.includeImage;
+    if (imageStyleContainer) imageStyleContainer.style.display = s.includeImage ? 'block' : 'none';
+  }
+  if (selectImageStyle && s.imageStyle !== undefined) selectImageStyle.value = s.imageStyle;
+  if (checkPg && s.checkPg !== undefined) checkPg.checked = s.checkPg;
+  if (qtyPg && s.qtyPg !== undefined) qtyPg.value = s.qtyPg;
+  if (checkPgKompleks && s.checkPgKompleks !== undefined) checkPgKompleks.checked = s.checkPgKompleks;
+  if (qtyPgKompleks && s.qtyPgKompleks !== undefined) qtyPgKompleks.value = s.qtyPgKompleks;
+  if (checkBenarSalah && s.checkBenarSalah !== undefined) checkBenarSalah.checked = s.checkBenarSalah;
+  if (qtyBenarSalah && s.qtyBenarSalah !== undefined) qtyBenarSalah.value = s.qtyBenarSalah;
+  if (checkMencocokkan && s.checkMencocokkan !== undefined) checkMencocokkan.checked = s.checkMencocokkan;
+  if (qtyMencocokkan && s.qtyMencocokkan !== undefined) qtyMencocokkan.value = s.qtyMencocokkan;
+  if (checkIsian && s.checkIsian !== undefined) checkIsian.checked = s.checkIsian;
+  if (qtyIsian && s.qtyIsian !== undefined) qtyIsian.value = s.qtyIsian;
+  if (checkUraian && s.checkUraian !== undefined) checkUraian.checked = s.checkUraian;
+  if (qtyUraian && s.qtyUraian !== undefined) qtyUraian.value = s.qtyUraian;
+}
+
+function setupSoalAutoSave() {
+  const textInputs = [inputMapel, selectKelas, inputTp, inputMateri, inputPrompt, selectKognitif, selectImageStyle, qtyPg, qtyPgKompleks, qtyBenarSalah, qtyMencocokkan, qtyIsian, qtyUraian];
+  textInputs.forEach(el => {
+    if (el) {
+      el.addEventListener('input', saveSoalFormState);
+      el.addEventListener('change', saveSoalFormState);
+    }
+  });
+  const checkInputs = [checkIncludeImage, checkPg, checkPgKompleks, checkBenarSalah, checkMencocokkan, checkIsian, checkUraian];
+  checkInputs.forEach(chk => {
+    if (chk) {
+      chk.addEventListener('change', saveSoalFormState);
+    }
+  });
+}
 
 async function initSettings() {
   // Inisialisasi Tema (Default: Warm Paper)
@@ -256,6 +327,10 @@ async function initSettings() {
   if (storedAcademic && storedAcademic.afresto_detected_academic) {
     applyDetectedAcademic(storedAcademic.afresto_detected_academic);
   }
+
+  // Pulihkan seluruh parameter form Soal Asesmen dan aktifkan auto-save
+  await restoreSoalFormState();
+  setupSoalAutoSave();
 
   checkActiveTabStatus();
 }
@@ -2514,6 +2589,38 @@ function calculateAfrestoDeadline(baseDate, daysAhead) {
   return `${year}-${month}-${day} 23:59`;
 }
 
+// Helper: Tampilkan Pratinjau Materi Pembelajaran
+function displayLearningMaterialPreview(mat) {
+  if (!mat) return;
+  const prevJudul = document.getElementById('preview-materi-judul');
+  const prevKonten = document.getElementById('preview-materi-konten');
+  const prevTugasCont = document.getElementById('preview-materi-tugas-container');
+  const prevTugas = document.getElementById('preview-materi-tugas');
+  const prevMulai = document.getElementById('preview-jadwal-mulai');
+  const prevTutup = document.getElementById('preview-jadwal-tutup');
+  const prevLimit = document.getElementById('preview-jadwal-limit');
+  const materiResultsSection = document.getElementById('materi-results-section');
+
+  if (prevJudul) prevJudul.textContent = mat.judul || "-";
+  if (prevKonten) prevKonten.innerHTML = mat.konten_html || "-";
+  
+  const qText = mat.penugasan?.pertanyaan || (mat.denganPenugasan && mat.pertanyaan) || "";
+  if (qText) {
+    if (prevTugas) prevTugas.textContent = qText;
+    if (prevTugasCont) prevTugasCont.classList.remove('hidden');
+  } else {
+    if (prevTugasCont) prevTugasCont.classList.add('hidden');
+  }
+
+  if (prevMulai) prevMulai.textContent = mat.materiMulai || "-";
+  if (prevTutup) prevTutup.textContent = mat.materiDitutup || "Tanpa Batas";
+  if (prevLimit) prevLimit.textContent = mat.limitPenugasan || "-";
+
+  if (materiResultsSection) {
+    materiResultsSection.classList.remove('hidden');
+  }
+}
+
 // Inisialisasi Modul Navigasi & Materi
 function initMateriModule() {
   const tabModuleSoal = document.getElementById('tab-module-soal');
@@ -2547,8 +2654,9 @@ function initMateriModule() {
   const materiAlert = document.getElementById('materi-alert');
   const materiResultsSection = document.getElementById('materi-results-section');
   const btnInjectMateri = document.getElementById('btn-inject-materi');
+  const btnClearMateriDraft = document.getElementById('btn-clear-materi-draft');
 
-  // Inisialisasi Tanggal Awal
+  // Inisialisasi Tanggal Awal jika belum ada
   if (inputMateriMulai && !inputMateriMulai.value) {
     inputMateriMulai.value = formatAfrestoDateTime(new Date());
   }
@@ -2556,9 +2664,106 @@ function initMateriModule() {
     inputMateriLimit.value = calculateAfrestoDeadline(new Date(), 7);
   }
 
-  // Tab Switcher
+  // Simpan State Form Materi ke chrome.storage.local
+  function saveMateriFormState() {
+    const state = {
+      mapel: inputMateriMapel?.value || "",
+      kelas: selectMateriKelas?.value || "",
+      gaya: selectMateriGaya?.value || "",
+      topik: inputMateriTopik?.value || "",
+      custom: inputMateriCustom?.value || "",
+      includeImage: checkMateriIncludeImage ? checkMateriIncludeImage.checked : true,
+      imageStyle: selectMateriImageStyle?.value || "AUTO",
+      penugasan: checkMateriPenugasan ? checkMateriPenugasan.checked : true,
+      ikutGlobal: checkMateriIkutGlobal ? checkMateriIkutGlobal.checked : true,
+      mulai: inputMateriMulai?.value || "",
+      ditutup: inputMateriDitutup?.value || "",
+      tanpaTutup: checkMateriTanpaTutup ? checkMateriTanpaTutup.checked : true,
+      limit: inputMateriLimit?.value || ""
+    };
+    chrome.storage.local.set({ afresto_materi_form_state: state });
+  }
+
+  // Pulihkan State Form Materi & Draft Terakhir
+  chrome.storage.local.get(['afresto_materi_form_state', 'afresto_last_learning_material', 'afresto_active_module']).then((data) => {
+    if (data.afresto_materi_form_state) {
+      const s = data.afresto_materi_form_state;
+      if (inputMateriMapel && s.mapel !== undefined && s.mapel) inputMateriMapel.value = s.mapel;
+      if (selectMateriKelas && s.kelas !== undefined && s.kelas) selectMateriKelas.value = s.kelas;
+      if (selectMateriGaya && s.gaya !== undefined && s.gaya) selectMateriGaya.value = s.gaya;
+      if (inputMateriTopik && s.topik !== undefined) inputMateriTopik.value = s.topik;
+      if (inputMateriCustom && s.custom !== undefined) inputMateriCustom.value = s.custom;
+      if (checkMateriIncludeImage && s.includeImage !== undefined) {
+        checkMateriIncludeImage.checked = s.includeImage;
+        if (materiImageStyleContainer) {
+          materiImageStyleContainer.style.display = s.includeImage ? 'block' : 'none';
+        }
+      }
+      if (selectMateriImageStyle && s.imageStyle !== undefined) selectMateriImageStyle.value = s.imageStyle;
+      if (checkMateriPenugasan && s.penugasan !== undefined) {
+        checkMateriPenugasan.checked = s.penugasan;
+        if (sectionMateriLimit) {
+          sectionMateriLimit.style.display = s.penugasan ? 'block' : 'none';
+        }
+      }
+      if (checkMateriIkutGlobal && s.ikutGlobal !== undefined) checkMateriIkutGlobal.checked = s.ikutGlobal;
+      if (inputMateriMulai && s.mulai) inputMateriMulai.value = s.mulai;
+      if (checkMateriTanpaTutup && s.tanpaTutup !== undefined) {
+        checkMateriTanpaTutup.checked = s.tanpaTutup;
+        if (s.tanpaTutup) {
+          inputMateriDitutup.disabled = true;
+          inputMateriDitutup.value = "(Buka terus tanpa batas waktu)";
+          inputMateriDitutup.style.background = "var(--bg-surface-elevated)";
+          inputMateriDitutup.style.color = "var(--text-muted)";
+        } else {
+          inputMateriDitutup.disabled = false;
+          if (s.ditutup) inputMateriDitutup.value = s.ditutup;
+          inputMateriDitutup.style.background = "var(--bg-surface)";
+          inputMateriDitutup.style.color = "var(--text-primary)";
+        }
+      }
+      if (inputMateriLimit && s.limit) inputMateriLimit.value = s.limit;
+    }
+
+    if (data.afresto_last_learning_material) {
+      currentLearningMaterial = data.afresto_last_learning_material;
+      displayLearningMaterialPreview(currentLearningMaterial);
+    }
+
+    if (data.afresto_active_module === 'materi') {
+      switchModuleTab('materi');
+    }
+  });
+
+  // Pasang Auto-Save pada Form Materi
+  const materiFormElements = [inputMateriMapel, selectMateriKelas, selectMateriGaya, inputMateriTopik, inputMateriCustom, selectMateriImageStyle, inputMateriMulai, inputMateriDitutup, inputMateriLimit];
+  materiFormElements.forEach(el => {
+    if (el) {
+      el.addEventListener('input', saveMateriFormState);
+      el.addEventListener('change', saveMateriFormState);
+    }
+  });
+  const materiCheckElements = [checkMateriIncludeImage, checkMateriPenugasan, checkMateriIkutGlobal, checkMateriTanpaTutup];
+  materiCheckElements.forEach(chk => {
+    if (chk) {
+      chk.addEventListener('change', saveMateriFormState);
+    }
+  });
+
+  // Tombol Hapus Draft Materi
+  if (btnClearMateriDraft) {
+    btnClearMateriDraft.addEventListener('click', async () => {
+      currentLearningMaterial = null;
+      await chrome.storage.local.remove('afresto_last_learning_material');
+      if (materiResultsSection) materiResultsSection.classList.add('hidden');
+      showToast("Draft materi berhasil dihapus.", "info");
+    });
+  }
+
+  // Tab Switcher dengan Persistensi
   function switchModuleTab(mode) {
     currentActiveModule = mode;
+    chrome.storage.local.set({ afresto_active_module: mode });
     if (mode === 'materi') {
       if (tabModuleMateri) {
         tabModuleMateri.classList.add('active');
@@ -2593,6 +2798,7 @@ function initMateriModule() {
   if (btnMateriMulaiSekarang) {
     btnMateriMulaiSekarang.addEventListener('click', () => {
       inputMateriMulai.value = formatAfrestoDateTime(new Date());
+      saveMateriFormState();
     });
   }
 
@@ -2610,6 +2816,7 @@ function initMateriModule() {
         inputMateriDitutup.style.background = "var(--bg-surface)";
         inputMateriDitutup.style.color = "var(--text-primary)";
       }
+      saveMateriFormState();
     });
   }
 
@@ -2619,6 +2826,7 @@ function initMateriModule() {
       if (sectionMateriLimit) {
         sectionMateriLimit.style.display = checkMateriPenugasan.checked ? 'block' : 'none';
       }
+      saveMateriFormState();
     });
   }
 
@@ -2626,6 +2834,7 @@ function initMateriModule() {
   if (checkMateriIncludeImage && materiImageStyleContainer) {
     checkMateriIncludeImage.addEventListener('change', () => {
       materiImageStyleContainer.style.display = checkMateriIncludeImage.checked ? 'block' : 'none';
+      saveMateriFormState();
     });
   }
 
@@ -2633,16 +2842,19 @@ function initMateriModule() {
   if (btnDeadline3) {
     btnDeadline3.addEventListener('click', () => {
       inputMateriLimit.value = calculateAfrestoDeadline(new Date(), 3);
+      saveMateriFormState();
     });
   }
   if (btnDeadline7) {
     btnDeadline7.addEventListener('click', () => {
       inputMateriLimit.value = calculateAfrestoDeadline(new Date(), 7);
+      saveMateriFormState();
     });
   }
   if (btnDeadline14) {
     btnDeadline14.addEventListener('click', () => {
       inputMateriLimit.value = calculateAfrestoDeadline(new Date(), 14);
+      saveMateriFormState();
     });
   }
 
@@ -2666,6 +2878,7 @@ function initMateriModule() {
           if (res && res.detected && res.detected.mapel) {
             inputMateriMapel.value = res.detected.mapel;
             if (res.detected.kelas) selectMateriKelas.value = res.detected.kelas;
+            saveMateriFormState();
             checkActiveTabStatus();
           }
         };
@@ -2812,31 +3025,12 @@ function initMateriModule() {
           limitPenugasan: (denganPenugasan && inputMateriLimit) ? inputMateriLimit.value.trim() : ""
         };
 
-        // Render Pratinjau
-        const prevJudul = document.getElementById('preview-materi-judul');
-        const prevKonten = document.getElementById('preview-materi-konten');
-        const prevTugasCont = document.getElementById('preview-materi-tugas-container');
-        const prevTugas = document.getElementById('preview-materi-tugas');
-        const prevMulai = document.getElementById('preview-jadwal-mulai');
-        const prevTutup = document.getElementById('preview-jadwal-tutup');
-        const prevLimit = document.getElementById('preview-jadwal-limit');
+        // Simpan rancangan materi ke storage secara persisten
+        await chrome.storage.local.set({ afresto_last_learning_material: currentLearningMaterial });
 
-        if (prevJudul) prevJudul.textContent = currentLearningMaterial.judul;
-        if (prevKonten) prevKonten.innerHTML = currentLearningMaterial.konten_html;
-        
-        if (denganPenugasan && currentLearningMaterial.penugasan?.pertanyaan) {
-          if (prevTugas) prevTugas.textContent = currentLearningMaterial.penugasan.pertanyaan;
-          if (prevTugasCont) prevTugasCont.classList.remove('hidden');
-        } else {
-          if (prevTugasCont) prevTugasCont.classList.add('hidden');
-        }
-
-        if (prevMulai) prevMulai.textContent = currentLearningMaterial.materiMulai || "-";
-        if (prevTutup) prevTutup.textContent = currentLearningMaterial.materiDitutup || "Tanpa Batas";
-        if (prevLimit) prevLimit.textContent = currentLearningMaterial.limitPenugasan || "-";
-
+        // Tampilkan Pratinjau
+        displayLearningMaterialPreview(currentLearningMaterial);
         if (materiResultsSection) {
-          materiResultsSection.classList.remove('hidden');
           materiResultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       } catch (err) {

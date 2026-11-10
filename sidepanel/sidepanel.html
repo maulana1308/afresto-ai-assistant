@@ -618,11 +618,14 @@
 
         <!-- KARTU HASIL PRATINJAU MATERI & INJEKSI OTOMATIS -->
         <section id="materi-results-section" class="card hidden" style="border: 2px solid var(--border-focus); margin-top: 14px;">
-          <div class="results-header" style="border-bottom: 1px solid var(--border-default); padding-bottom: 8px; margin-bottom: 10px;">
+          <div class="results-header" style="border-bottom: 1px solid var(--border-default); padding-bottom: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
             <div class="results-title-group">
               <h2 class="card-title">📄 Materi Siap Diinputkan</h2>
               <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">🟢 Siap Input</span>
             </div>
+            <button type="button" id="btn-clear-materi-draft" class="btn-xs btn-outline-danger" title="Hapus draft rancangan ini" style="font-size: 11px; padding: 2px 7px;">
+              🗑️ Hapus Draft
+            </button>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 8px;">

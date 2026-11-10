@@ -1123,23 +1123,47 @@ function formatQuestionsAsHtml(rawText) {
     }
   }
 
+  const escapeHtmlAndTags = (str) => {
+    // 1. Tangkap semua tag seperti <header>, <h1>, <div class="...">, </code> dsb agar tidak meledak di DOM
+    const tagTokens = [];
+    let tokenized = str.replace(/<([^>]+)>/g, (m, tagContent) => {
+      const id = `__TAG_${tagTokens.length}__`;
+      tagTokens.push(tagContent);
+      return id;
+    });
+
+    // 2. Escape karakter HTML biasa
+    let escaped = tokenized
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // 3. Kembalikan token tag sebagai <code>&lt;...&gt;</code> dengan gaya teks kode yang jelas dan rapi
+    tagTokens.forEach((content, i) => {
+      const cleanContent = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      escaped = escaped.replace(
+        `__TAG_${i}__`,
+        `<code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; color: #0284c7; font-size: 13px; font-weight: 600;">&lt;${cleanContent}&gt;</code>`
+      );
+    });
+
+    return escaped;
+  };
+
   if (items.length > 0) {
     const listHtml = items.map(it => {
-      // Escape tag HTML seperti <article>, <div>, <h1>, </tag> agar tampil sebagai teks kode yang aman dan terbaca
-      const escaped = it.text
-        .replace(/&/g, '&amp;')
-        .replace(/<(\/?[a-zA-Z0-9_-]+)>/g, '<code>&lt;$1&gt;</code>');
-      return `<li style="margin-bottom: 12px; font-size: 14px; line-height: 1.6; color: #1e293b; font-weight: normal;">${escaped}</li>`;
+      const escaped = escapeHtmlAndTags(it.text);
+      return `  <li style="margin-bottom: 12px; font-size: 14px; line-height: 1.6; color: #1e293b; font-weight: normal;">${escaped}</li>`;
     }).join('\n');
 
     return `<ol style="margin: 0; padding-left: 22px; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: #1e293b;">\n${listHtml}\n</ol>`;
   }
 
   // Fallback jika tidak terdeteksi penomoran
-  const escaped = rawText
-    .replace(/&/g, '&amp;')
-    .replace(/<(\/?[a-zA-Z0-9_-]+)>/g, '<code>&lt;$1&gt;</code>')
-    .replace(/\n/g, '<br>');
+  const escaped = escapeHtmlAndTags(rawText).replace(/\n/g, '<br>');
   return `<p style="font-size: 14px; line-height: 1.6; color: #1e293b; margin: 0;">${escaped}</p>`;
 }
 
