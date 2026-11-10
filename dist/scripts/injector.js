@@ -993,16 +993,25 @@ async function injectLearningMaterial(data) {
     injectedElements.push("Judul Materi");
   }
 
-  // 2. JIKA ADA TOMBOL 'Ketik Isi Artikel' DAN EDITOR BELUM MUNCUL, BANTU KLIK OTOMATIS
+  // 2. BUKA EDITOR ARTIKEL JIKA BELUM TERBUKA
   const btnKetik = Array.from(document.querySelectorAll('button, a, .btn, span, div')).find(el => {
-    const t = el.textContent.trim().toLowerCase();
+    const t = (el.textContent || "").trim().toLowerCase();
     return t.includes('ketik isi artikel') || t.includes('buka editor');
   });
-  const isEditorAlreadyOpen = Boolean(document.querySelector('.fr-element, .note-editable, iframe[id*="konten"]'));
-  if (btnKetik && !isEditorAlreadyOpen) {
+
+  const artikelSection = btnKetik?.closest('section, div, .card, .form-group') || 
+                         Array.from(document.querySelectorAll('section, div, .card, .form-group')).find(s => {
+                           const txt = (s.textContent || "").toLowerCase();
+                           return txt.includes('artikel materi') || txt.includes('ketik isi artikel');
+                         });
+
+  let kontenFr = artikelSection ? artikelSection.querySelector('.fr-element, .fr-view') : null;
+
+  // Jika tombol Ketik Isi Artikel ada dan editor khusus artikel belum ada di dalam bloknya, klik tombolnya!
+  if (btnKetik && !kontenFr) {
     try {
       btnKetik.click();
-      await sleep(350);
+      await sleep(400);
     } catch (e) {}
   }
 
@@ -1025,13 +1034,14 @@ async function injectLearningMaterial(data) {
       checkPenugasan.checked = shouldCheck;
       checkPenugasan.dispatchEvent(new Event('change', { bubbles: true }));
       checkPenugasan.dispatchEvent(new Event('click', { bubbles: true }));
-      await sleep(300);
+      await sleep(350);
     }
   }
 
-  // 5. INJEKSI PERTANYAAN TUGAS SISWA (FROALA / TINYMCE / TEXTAREA)
+  // 5. INJEKSI PERTANYAAN TUGAS SISWA (DIFORMAT RAPI DENGAN DAFTAR BERURUTAN & KODE TER-ESCAPE)
   if (data.pertanyaan && data.pertanyaan.trim().length > 0) {
-    const tugasSuccess = setRichTextEditorValue('pertanyaan', data.pertanyaan);
+    const formattedQuestions = formatQuestionsAsHtml(data.pertanyaan);
+    const tugasSuccess = setRichTextEditorValue('pertanyaan', formattedQuestions);
     if (tugasSuccess) injectedElements.push("Pertanyaan Tugas");
   }
 
@@ -1096,6 +1106,44 @@ async function injectLearningMaterial(data) {
 }
 
 /**
+ * Memformat teks pertanyaan tugas menjadi HTML rapi, berurutan, dan aman dari tag koding
+ */
+function formatQuestionsAsHtml(rawText) {
+  if (!rawText) return "";
+
+  // Pecah pertanyaan berdasarkan nomor (1., 2., 3., dst.)
+  const regex = /(?:^|\n|\s*)([1-9]\d*[\.\)])\s*([\s\S]*?)(?=(?:\n\s*[1-9]\d*[\.\)]|\s+[1-9]\d*[\.\)]|$))/g;
+  const items = [];
+  let match;
+  while ((match = regex.exec(rawText)) !== null) {
+    const num = match[1];
+    const text = match[2].trim();
+    if (text) {
+      items.push({ num, text });
+    }
+  }
+
+  if (items.length > 0) {
+    const listHtml = items.map(it => {
+      // Escape tag HTML seperti <article>, <div>, <h1>, </tag> agar tampil sebagai teks kode yang aman dan terbaca
+      const escaped = it.text
+        .replace(/&/g, '&amp;')
+        .replace(/<(\/?[a-zA-Z0-9_-]+)>/g, '<code>&lt;$1&gt;</code>');
+      return `<li style="margin-bottom: 12px; font-size: 14px; line-height: 1.6; color: #1e293b; font-weight: normal;">${escaped}</li>`;
+    }).join('\n');
+
+    return `<ol style="margin: 0; padding-left: 22px; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: #1e293b;">\n${listHtml}\n</ol>`;
+  }
+
+  // Fallback jika tidak terdeteksi penomoran
+  const escaped = rawText
+    .replace(/&/g, '&amp;')
+    .replace(/<(\/?[a-zA-Z0-9_-]+)>/g, '<code>&lt;$1&gt;</code>')
+    .replace(/\n/g, '<br>');
+  return `<p style="font-size: 14px; line-height: 1.6; color: #1e293b; margin: 0;">${escaped}</p>`;
+}
+
+/**
  * Injektor Universal untuk Editor Konten & Tugas (Mendukung Froala, TinyMCE, Summernote, ContentEditable, dan Textarea)
  */
 function setRichTextEditorValue(targetType, htmlContent) {
@@ -1108,21 +1156,27 @@ function setRichTextEditorValue(targetType, htmlContent) {
   if (frElements.length > 0) {
     let targetFr = null;
     if (targetType === 'konten') {
-      // Prioritaskan fr-element pertama atau yang berdekatan dengan tombol/teks 'Artikel' / 'Konten'
+      // Prioritaskan fr-element di dalam kontainer 'artikel materi'
       targetFr = frElements.find(el => {
-        const parentText = el.closest('section, div, .form-group, .card')?.textContent || "";
-        return parentText.toLowerCase().includes('artikel') || parentText.toLowerCase().includes('isi');
+        const parentText = (el.closest('section, div, .form-group, .card')?.textContent || "").toLowerCase();
+        return (parentText.includes('artikel') || parentText.includes('isi')) && !parentText.includes('pertanyaan untuk siswa');
       }) || frElements[0];
     } else if (targetType === 'pertanyaan') {
-      // Prioritaskan fr-element kedua atau yang di bawah section 'Pertanyaan' / 'Tugas'
+      // Prioritaskan fr-element di dalam kontainer 'pertanyaan' atau 'tugas'
       targetFr = frElements.find(el => {
-        const parentText = el.closest('section, div, .form-group, .card')?.textContent || "";
-        return parentText.toLowerCase().includes('pertanyaan') || parentText.toLowerCase().includes('tugas');
-      }) || (frElements.length > 1 ? frElements[1] : null);
+        const parentText = (el.closest('section, div, .form-group, .card')?.textContent || "").toLowerCase();
+        return parentText.includes('pertanyaan') || parentText.includes('tugas');
+      }) || (frElements.length > 1 ? frElements[frElements.length - 1] : frElements[0]);
     }
 
     if (targetFr) {
       targetFr.focus();
+      // Reset styling abnormal
+      targetFr.style.fontSize = "14px";
+      targetFr.style.lineHeight = "1.6";
+      targetFr.style.fontWeight = "normal";
+      targetFr.style.color = "#1e293b";
+
       targetFr.innerHTML = htmlContent;
       targetFr.classList.remove('fr-placeholder');
 
