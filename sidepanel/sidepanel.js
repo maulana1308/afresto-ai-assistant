@@ -483,7 +483,6 @@ function processPageStatus(res, isMateriTab, standbyText) {
     }
   }
 }
-}
 
 function updateStatusBanner(state, message) {
   pageStatusText.textContent = message;

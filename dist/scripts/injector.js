@@ -1201,14 +1201,6 @@ function setRichTextEditorValue(targetType, htmlContent) {
   return injected;
 }
 
-  return { 
-    success: true, 
-    judul: data.judul,
-    materiMulai: data.materiMulai,
-    limitPenugasan: data.limitPenugasan
-  };
-}
-
 // ------------------------------------------------------------------------
 // 5. MESSAGE LISTENER DARI SIDE PANEL
 // ------------------------------------------------------------------------
