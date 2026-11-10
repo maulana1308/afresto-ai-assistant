@@ -3071,23 +3071,53 @@ function initMateriModule() {
 
         chrome.tabs.sendMessage(tab.id, { action: "INJECT_MATERI", data: payload }, (res) => {
           btnInjectMateri.disabled = false;
-          btnInjectMateri.querySelector('.btn-text').textContent = "📋 Masukkan Konten ke Form Afresto";
           btnInjectMateri.querySelector('.spinner').classList.add('hidden');
 
           if (chrome.runtime.lastError || !res || !res.success) {
-            alert("Gagal memasukkan materi: " + (res?.error || chrome.runtime.lastError?.message || "Pastikan Anda berada di halaman Form Materi Afresto."));
+            btnInjectMateri.querySelector('.btn-text').textContent = "📋 Masukkan Konten ke Form Afresto";
+            const errMsg = res?.error || chrome.runtime.lastError?.message || "Pastikan Anda berada di halaman Form Materi Afresto.";
+            showToast("Gagal memasukkan materi: " + errMsg, "error");
           } else {
-            const detail = (res.injectedElements && res.injectedElements.length > 0)
-              ? `Komponen yang berhasil diisi:\n• ${res.injectedElements.join('\n• ')}\n\n`
-              : '';
-            alert(`✅ Berhasil Dimasukkan ke Form Afresto!\n\n${detail}Silakan periksa kembali artikel di editor dan sesuaikan jadwal Anda langsung di halaman Afresto, lalu klik tombol 'Simpan' jika sudah selesai.`);
+            // 1. Notifikasi Toast Mengambang
+            showToast("🎉 Konten materi & tugas berhasil dimasukkan ke form Afresto!", "success");
+
+            // 2. Ubah Status Badge di Header Kartu Hasil
+            const statusBadge = document.getElementById('materi-status-badge');
+            if (statusBadge) {
+              statusBadge.textContent = "🎉 Telah Diinputkan";
+              statusBadge.style.background = "rgba(16, 185, 129, 0.25)";
+              statusBadge.style.color = "var(--accent-emerald)";
+            }
+
+            // 3. Ubah Tombol ke Status Sukses Meriah
+            btnInjectMateri.classList.remove('btn-success');
+            btnInjectMateri.classList.add('btn-primary');
+            btnInjectMateri.querySelector('.btn-text').textContent = "✓ Selesai Dimasukkan ke Halaman Afresto!";
+
+            setTimeout(() => {
+              btnInjectMateri.classList.remove('btn-primary');
+              btnInjectMateri.classList.add('btn-success');
+              btnInjectMateri.querySelector('.btn-text').textContent = "📋 Masukkan Ulang ke Form Afresto";
+            }, 4500);
+
+            // 4. Buka Banner Laporan Sukses Terperinci
+            const successBanner = document.getElementById('materi-inject-success-banner');
+            const compList = document.getElementById('materi-injected-components');
+            if (successBanner && compList) {
+              const elements = (res.injectedElements && res.injectedElements.length > 0)
+                ? res.injectedElements
+                : ["Judul Materi (#nama)", "Artikel & Visual (#konten)", "Tugas Siswa (#pertanyaan)", "Jadwal & Rombel Global"];
+              compList.innerHTML = elements.map(el => `<div style="display: flex; align-items: center; gap: 4px; margin-bottom: 2px;"><span>✓</span> <strong>${el}</strong></div>`).join('');
+              successBanner.classList.remove('hidden');
+              successBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
           }
         });
       } catch (err) {
         btnInjectMateri.disabled = false;
         btnInjectMateri.querySelector('.btn-text').textContent = "📋 Masukkan Konten ke Form Afresto";
         btnInjectMateri.querySelector('.spinner').classList.add('hidden');
-        alert("Gagal: " + err.message);
+        showToast("Gagal: " + err.message, "error");
       }
     });
   }

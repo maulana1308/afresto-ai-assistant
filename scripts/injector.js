@@ -1096,6 +1096,12 @@ async function injectLearningMaterial(data) {
     }, 2500);
   }
 
+  // Tampilkan notifikasi melayang di pojok halaman web Afresto
+  showAfrestoPageToast(
+    "✅ Materi Berhasil Dimasukkan!",
+    `Komponen terisi: ${injectedElements.join(', ')}. Silakan periksa formulir dan klik tombol 'Simpan' jika sudah sesuai.`
+  );
+
   return {
     success: true,
     injectedElements,
@@ -1103,6 +1109,63 @@ async function injectLearningMaterial(data) {
     materiMulai: data.materiMulai,
     limitPenugasan: data.limitPenugasan
   };
+}
+
+/**
+ * Notifikasi Toast Melayang di Layar Afresto
+ */
+function showAfrestoPageToast(title, message) {
+  try {
+    let toast = document.getElementById('afresto-ai-injected-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'afresto-ai-injected-toast';
+      toast.style.cssText = `
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 9999999;
+        background: #0f172a;
+        color: #ffffff;
+        border: 2px solid #10b981;
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 380px;
+        pointer-events: auto;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(-20px);
+        opacity: 0;
+      `;
+      document.body.appendChild(toast);
+    }
+
+    toast.innerHTML = `
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+        <div style="background: rgba(16, 185, 129, 0.2); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; color: #10b981;">✓</div>
+        <div style="flex: 1;">
+          <div style="font-size: 13px; font-weight: 700; color: #10b981; margin-bottom: 2px;">${title}</div>
+          <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.4;">${message}</div>
+        </div>
+      </div>
+    `;
+
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateY(0)';
+      toast.style.opacity = '1';
+    });
+
+    setTimeout(() => {
+      toast.style.transform = 'translateY(-20px)';
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 400);
+    }, 5000);
+  } catch (e) {
+    console.warn("Gagal menampilkan toast halaman:", e);
+  }
 }
 
 /**
