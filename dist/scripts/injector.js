@@ -178,26 +178,50 @@ function checkIsQuestionPage() {
  */
 function checkIsMateriPage() {
   const currentUrl = (window.location.href || "").toLowerCase();
+  const pageText = (document.body ? (document.body.innerText || document.body.textContent || "") : "").toLowerCase();
 
-  // 1. Blacklist modul Afresto yang bukan pembuatan materi
-  const nonMateriKeywords = ['jurnal', 'presensi', 'rekap', 'kalender', 'profil', 'dashboard', 'silabus', 'rpp', 'evaluasi'];
-  if (nonMateriKeywords.some(kw => currentUrl.includes(kw))) {
-    return false;
-  }
+  // 1. Sinyal Teks Visual Kuat di Halaman (Berdasarkan DOM Nyata Afresto)
+  const hasMateriHeader = pageText.includes('form materi') || 
+                          pageText.includes('tambah materi') || 
+                          pageText.includes('artikel materi') ||
+                          pageText.includes('tambah penugasan');
 
-  // 2. Cek apakah ada di URL KBM / Materi
-  const isMateriUrl = currentUrl.includes('/materi') || currentUrl.includes('/kbm');
+  // 2. Sinyal Tombol / Elemen Spesifik Materi
+  const btnKetik = Array.from(document.querySelectorAll('button, a, .btn, span, div')).some(el => {
+    const t = (el.textContent || "").trim().toLowerCase();
+    return t.includes('ketik isi artikel') || t.includes('buka editor');
+  });
 
-  // 3. Cek form field materi di DOM
-  const hasJudul = Boolean(document.getElementById('nama') || document.querySelector('input[name="nama"]'));
-  const hasKonten = Boolean(
+  // 3. Sinyal Input Judul (placeholder: "nama / judul materi" atau name/id)
+  const hasJudulInput = Boolean(
+    document.querySelector('input[placeholder*="judul materi" i]') ||
+    document.querySelector('input[placeholder*="nama / judul" i]') ||
+    document.querySelector('input[placeholder*="judul" i]') ||
+    document.getElementById('nama') ||
+    document.querySelector('input[name="nama"]') ||
+    document.getElementById('judul') ||
+    document.querySelector('input[name="judul"]') ||
+    document.querySelector('input[name="nama_materi"]')
+  );
+
+  // 4. Sinyal Form Konten / Froala / Textarea
+  const hasKontenEditor = Boolean(
+    document.querySelector('.fr-element') ||
+    document.querySelector('.note-editable') ||
     document.getElementById('konten') || 
     document.querySelector('textarea[name="konten"]') || 
     document.getElementById('konten_ifr') || 
     findEditorIframe('konten')
   );
 
-  return Boolean((isMateriUrl && (hasJudul || hasKonten)) || (hasJudul && hasKonten));
+  // 5. Sinyal URL
+  const isMateriUrl = currentUrl.includes('/materi') || currentUrl.includes('/kbm');
+
+  if (hasMateriHeader || btnKetik) return true;
+  if (isMateriUrl && (hasJudulInput || hasKontenEditor)) return true;
+  if (hasJudulInput && (btnKetik || hasKontenEditor)) return true;
+
+  return false;
 }
 
 /**
@@ -949,13 +973,15 @@ async function injectLearningMaterial(data) {
   let injectedElements = [];
 
   // 1. INJEKSI JUDUL MATERI (Multi-Selector Fallback)
-  const inputTitle = document.getElementById('nama') ||
+  const inputTitle = document.querySelector('input[placeholder*="nama / judul" i]') ||
+                     document.querySelector('input[placeholder*="judul materi" i]') ||
+                     document.querySelector('input[placeholder*="judul" i]') ||
+                     document.getElementById('nama') ||
                      document.querySelector('input[name="nama"]') ||
                      document.getElementById('judul') ||
                      document.querySelector('input[name="judul"]') ||
                      document.querySelector('input[name="nama_materi"]') ||
                      document.querySelector('input[name="title"]') ||
-                     document.querySelector('input[placeholder*="Judul" i]') ||
                      document.querySelector('input[placeholder*="Nama" i]');
 
   if (inputTitle && data.judul) {
@@ -968,7 +994,7 @@ async function injectLearningMaterial(data) {
   }
 
   // 2. JIKA ADA TOMBOL 'Ketik Isi Artikel' DAN EDITOR BELUM MUNCUL, BANTU KLIK OTOMATIS
-  const btnKetik = Array.from(document.querySelectorAll('button, a, .btn')).find(el => {
+  const btnKetik = Array.from(document.querySelectorAll('button, a, .btn, span, div')).find(el => {
     const t = el.textContent.trim().toLowerCase();
     return t.includes('ketik isi artikel') || t.includes('buka editor');
   });
@@ -976,7 +1002,7 @@ async function injectLearningMaterial(data) {
   if (btnKetik && !isEditorAlreadyOpen) {
     try {
       btnKetik.click();
-      await sleep(300);
+      await sleep(350);
     } catch (e) {}
   }
 
@@ -984,17 +1010,22 @@ async function injectLearningMaterial(data) {
   const kontenSuccess = setRichTextEditorValue('konten', data.konten);
   if (kontenSuccess) injectedElements.push("Konten Artikel");
 
-  // 4. PENUGASAN CHECKBOX (#penugasan)
+  // 4. PENUGASAN CHECKBOX (#penugasan / 'TAMBAH PENUGASAN')
   const checkPenugasan = document.getElementById('penugasan') || 
                          document.querySelector('input[name="penugasan"]') ||
-                         document.querySelector('input[name*="tugas"]');
+                         document.querySelector('input[name*="tugas"]') ||
+                         Array.from(document.querySelectorAll('input[type="checkbox"]')).find(cb => {
+                           const parent = cb.closest('div, tr, label, .form-group') || cb.parentElement;
+                           return parent?.textContent?.toLowerCase().includes('penugasan');
+                         });
+
   if (checkPenugasan) {
     const shouldCheck = Boolean(data.denganPenugasan || (data.pertanyaan && data.pertanyaan.trim().length > 0));
     if (checkPenugasan.checked !== shouldCheck) {
       checkPenugasan.checked = shouldCheck;
       checkPenugasan.dispatchEvent(new Event('change', { bubbles: true }));
       checkPenugasan.dispatchEvent(new Event('click', { bubbles: true }));
-      await sleep(200);
+      await sleep(300);
     }
   }
 

@@ -422,42 +422,67 @@ async function checkActiveTabStatus() {
     // 3. Tanya content script untuk verifikasi fisik form di DOM
     chrome.tabs.sendMessage(tab.id, { action: "CHECK_PAGE_STATUS" }, (res) => {
       if (chrome.runtime.lastError || !res) {
+        // Self-healing auto-inject jika tab belum reload setelah ekstensi di-update
+        if (tabUrl.includes("afresto.id") && chrome.scripting && chrome.scripting.executeScript) {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['scripts/injector.js']
+          }).then(() => {
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tab.id, { action: "CHECK_PAGE_STATUS" }, (retryRes) => {
+                if (retryRes) {
+                  processPageStatus(retryRes, isMateriTab, standbyText);
+                } else {
+                  updateStatusBanner(false, standbyText);
+                }
+              });
+            }, 200);
+          }).catch(() => {
+            updateStatusBanner(false, standbyText);
+          });
+          return;
+        }
         updateStatusBanner(false, standbyText);
         return;
       }
 
-      if (res.detectedAcademic) {
-        applyDetectedAcademic(res.detectedAcademic);
-      }
-
-      if (isMateriTab) {
-        // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB MATERI & BAHAN AJAR ---
-        if (res.isMateriPage) {
-          updateStatusBanner("active", "Terhubung: Halaman Input Materi Afresto Aktif!");
-          updateMateriPageDetection(res.detectedAcademic);
-        } else if (res.isSoalPage) {
-          updateStatusBanner("prep", "Halaman Soal Terdeteksi. Buka menu KBM → Materi jika ingin mengisi bahan ajar.");
-        } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
-          updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka menu Materi untuk input)`);
-        } else {
-          updateStatusBanner("waiting", standbyText);
-        }
-      } else {
-        // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB SOAL ASESMEN ---
-        if (res.isSoalPage) {
-          updateStatusBanner("active", "Terhubung: Halaman Input Soal Afresto Aktif!");
-        } else if (res.isMateriPage) {
-          updateStatusBanner("prep", "Halaman Materi Terdeteksi. Buka menu Evaluasi → Butir Soal jika ingin input soal.");
-        } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
-          updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka 'Butir Soal' untuk input)`);
-        } else {
-          updateStatusBanner("waiting", standbyText);
-        }
-      }
+      processPageStatus(res, isMateriTab, standbyText);
     });
   } catch (err) {
     updateStatusBanner("waiting", "Menghubungkan ke tab...");
   }
+}
+
+function processPageStatus(res, isMateriTab, standbyText) {
+  if (res.detectedAcademic) {
+    applyDetectedAcademic(res.detectedAcademic);
+  }
+
+  if (isMateriTab) {
+    // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB MATERI & BAHAN AJAR ---
+    if (res.isMateriPage) {
+      updateStatusBanner("active", "Terhubung: Halaman Input Materi Afresto Aktif!");
+      updateMateriPageDetection(res.detectedAcademic);
+    } else if (res.isSoalPage) {
+      updateStatusBanner("prep", "Halaman Soal Terdeteksi. Buka menu KBM → Materi jika ingin mengisi bahan ajar.");
+    } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
+      updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka menu Materi untuk input)`);
+    } else {
+      updateStatusBanner("waiting", standbyText);
+    }
+  } else {
+    // --- LOGIKA STATUS ADAPTIF KETIKA DI TAB SOAL ASESMEN ---
+    if (res.isSoalPage) {
+      updateStatusBanner("active", "Terhubung: Halaman Input Soal Afresto Aktif!");
+    } else if (res.isMateriPage) {
+      updateStatusBanner("prep", "Halaman Materi Terdeteksi. Buka menu Evaluasi → Butir Soal jika ingin input soal.");
+    } else if (res.detectedAcademic && res.detectedAcademic.mapel) {
+      updateStatusBanner("prep", `Mode Persiapan: Mapel ${res.detectedAcademic.mapel} Terdeteksi! (Buka 'Butir Soal' untuk input)`);
+    } else {
+      updateStatusBanner("waiting", standbyText);
+    }
+  }
+}
 }
 
 function updateStatusBanner(state, message) {
@@ -2625,25 +2650,50 @@ function initMateriModule() {
   // Sinkronisasi Data Mapel
   if (btnSyncMateri) {
     btnSyncMateri.addEventListener('click', async () => {
+      btnSyncMateri.textContent = "🔄 Memindai...";
+      btnSyncMateri.disabled = true;
+
       try {
-        const stored = await chrome.storage.local.get('afresto_detected_academic');
-        if (stored && stored.afresto_detected_academic && stored.afresto_detected_academic.mapel) {
-          inputMateriMapel.value = stored.afresto_detected_academic.mapel;
-          if (stored.afresto_detected_academic.kelas) {
-            selectMateriKelas.value = stored.afresto_detected_academic.kelas;
-          }
-        } else {
-          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tab && tab.id) {
-            chrome.tabs.sendMessage(tab.id, { action: "SYNC_ACADEMIC_INFO" }, (res) => {
-              if (res && res.detected && res.detected.mapel) {
-                inputMateriMapel.value = res.detected.mapel;
-                if (res.detected.kelas) selectMateriKelas.value = res.detected.kelas;
-              }
-            });
-          }
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab || !tab.id) {
+          btnSyncMateri.textContent = "🔄 Sinkronkan";
+          btnSyncMateri.disabled = false;
+          return;
         }
-      } catch (e) {}
+
+        const applyResult = (res) => {
+          btnSyncMateri.textContent = "🔄 Sinkronkan";
+          btnSyncMateri.disabled = false;
+          if (res && res.detected && res.detected.mapel) {
+            inputMateriMapel.value = res.detected.mapel;
+            if (res.detected.kelas) selectMateriKelas.value = res.detected.kelas;
+            checkActiveTabStatus();
+          }
+        };
+
+        chrome.tabs.sendMessage(tab.id, { action: "SYNC_ACADEMIC_INFO" }, (res) => {
+          if (chrome.runtime.lastError) {
+            if (chrome.scripting && chrome.scripting.executeScript) {
+              chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['scripts/injector.js']
+              }).then(() => {
+                setTimeout(() => {
+                  chrome.tabs.sendMessage(tab.id, { action: "SYNC_ACADEMIC_INFO" }, applyResult);
+                }, 200);
+              }).catch(() => {
+                btnSyncMateri.textContent = "🔄 Sinkronkan";
+                btnSyncMateri.disabled = false;
+              });
+              return;
+            }
+          }
+          applyResult(res);
+        });
+      } catch (e) {
+        btnSyncMateri.textContent = "🔄 Sinkronkan";
+        btnSyncMateri.disabled = false;
+      }
     });
   }
 
