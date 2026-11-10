@@ -1375,9 +1375,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   else if (message.action === "INJECT_SINGLE") {
     injectSingleQuestion(message.soal)
-      .then(() => sendResponse({ success: true }))
+      .then(() => {
+        showAfrestoPageToast(
+          `✅ Soal #${message.soal.originalIndex || ''} Berhasil Dimasukkan!`,
+          `Tipe: ${message.soal.tipe || 'PG'}. Formulir soal telah terisi lengkap di halaman Afresto.`
+        );
+        sendResponse({ success: true });
+      })
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
+  }
+  else if (message.action === "SHOW_PAGE_TOAST") {
+    showAfrestoPageToast(message.title, message.message);
+    sendResponse({ success: true });
   } 
   else if (message.action === "INJECT_SINGLE_AND_SUBMIT") {
     const { soal, isLast } = message;

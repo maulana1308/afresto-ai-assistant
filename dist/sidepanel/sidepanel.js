@@ -2220,8 +2220,9 @@ async function injectSingleQuestionDirect(soal) {
 
     chrome.tabs.sendMessage(tab.id, { action: "INJECT_SINGLE", soal }, (injectRes) => {
       if (chrome.runtime.lastError || !injectRes?.success) {
-        alert("Gagal menginput soal: " + (injectRes?.error || chrome.runtime.lastError?.message || "Pastikan form soal sudah siap."));
+        showToast("Gagal menginput soal: " + (injectRes?.error || chrome.runtime.lastError?.message || "Pastikan form soal sudah siap."), "error");
       } else {
+        showToast(`✅ Soal #${soal.originalIndex || ''} (${soal.tipe || 'PG'}) berhasil diinputkan ke form!`, "success");
         renderQuestionsList();
       }
     });
@@ -2231,14 +2232,14 @@ async function injectSingleQuestionDirect(soal) {
 async function injectAndSubmitSingleDirect(soal) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) {
-    alert("Tidak ada tab browser aktif!");
+    showToast("Tidak ada tab browser aktif!", "error");
     return;
   }
 
   // Pre-check apakah berada di halaman formulir soal Afresto
   chrome.tabs.sendMessage(tab.id, { action: "CHECK_PAGE_STATUS" }, (res) => {
     if (chrome.runtime.lastError || !res?.isSoalPage) {
-      alert("⚠️ Formulir soal belum terbuka!\n\nSilakan buka menu Evaluasi → Butir Soal → 'Tulis Soal Baru' di tab Afresto terlebih dahulu.");
+      showToast("⚠️ Formulir soal belum terbuka! Silakan buka menu Evaluasi → Tulis Soal Baru.", "warning");
       return;
     }
 
@@ -2248,11 +2249,12 @@ async function injectAndSubmitSingleDirect(soal) {
       isLast: false 
     }, (injectRes) => {
       if (chrome.runtime.lastError || !injectRes?.success) {
-        alert("Gagal menginput & menyimpan soal: " + (injectRes?.error || chrome.runtime.lastError?.message || "Pastikan Anda di halaman soal Afresto."));
+        showToast("Gagal menginput & menyimpan soal: " + (injectRes?.error || chrome.runtime.lastError?.message || "Pastikan Anda di halaman soal Afresto."), "error");
       } else {
         soal.status = "INJECTED";
         chrome.storage.local.set({ last_questions: currentQuestions });
         renderQuestionsList();
+        showToast(`💾 Soal #${soal.originalIndex || ''} (${soal.tipe || 'PG'}) berhasil disimpan ke Afresto!`, "success");
       }
     });
   });
@@ -2415,6 +2417,14 @@ async function runStepByStepAutoInjection() {
 
       if (isLast) {
         updateProgressUi(totalQuestions, totalQuestions, "🎉 Seluruh butir soal berhasil disimpan di Afresto!");
+        showToast(`🎉 Selesai! Seluruh ${totalQuestions} butir soal telah tersimpan di Afresto.`, "success");
+        try {
+          chrome.tabs.sendMessage(currentTab.id, {
+            action: "SHOW_PAGE_TOAST",
+            title: "🎉 Semua Soal Berhasil Disimpan!",
+            message: `Sebanyak ${totalQuestions} butir soal telah berhasil diinput & disimpan ke Afresto.`
+          });
+        } catch (e) {}
         break;
       } else {
         updateProgressUi(currentNumber, totalQuestions, `Menyimpan soal #${currentNumber}... Menunggu formulir berikutnya...`);
