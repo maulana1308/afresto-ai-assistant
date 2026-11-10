@@ -18,7 +18,7 @@ if exist "%TARGET_DIR%\update_url.txt" (
 )
 
 if "%UPDATE_URL%"=="" (
-    set "UPDATE_URL=https://update.sekolahanda.com/afresto/Afresto_AI_Assistant_latest.zip"
+    set "UPDATE_URL=https://github.com/maulana1308/afresto-ai-assistant/releases/latest/download/Afresto_AI_Assistant_latest.zip"
 )
 
 echo [INFO] Memeriksa server pembaruan...
