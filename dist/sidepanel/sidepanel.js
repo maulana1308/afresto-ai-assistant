@@ -2716,17 +2716,30 @@ function initMateriModule() {
             
             let base64 = "";
             try {
-              base64 = await downloadImageAsBase64(imgUrl, 600, 360);
+              base64 = await downloadImageAsBase64(imgUrl, 60000, (statusMsg) => {
+                btnGenerateMateri.querySelector('.btn-text').textContent = "⏳ " + statusMsg;
+              });
             } catch (e) {
-              base64 = imgUrl;
+              console.warn("Gagal mengunduh gambar AI dari server eksternal, beralih ke diagram SVG:", e);
+              base64 = null;
             }
 
-            const src = base64 || imgUrl;
-            imageTagHtml = `
+            if (base64) {
+              imageTagHtml = `
 <figure class="materi-visual-figure" style="text-align: center; margin: 16px 0;">
-  <img src="${src}" alt="${result.gambar_caption || 'Ilustrasi Materi'}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); border: 1px solid #e2e8f0;" />
+  <img src="${base64}" alt="${result.gambar_caption || 'Ilustrasi Materi'}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); border: 1px solid #e2e8f0;" />
   ${result.gambar_caption ? `<figcaption style="font-size: 11px; color: #64748b; margin-top: 6px; font-style: italic;">Gambar: ${result.gambar_caption}</figcaption>` : ''}
 </figure>`;
+            } else {
+              const fallbackSvg = generateFallbackSvg(result.judul, result.gambar_caption || "Diagram Konsep Materi Pembelajaran");
+              imageTagHtml = `
+<figure class="materi-visual-figure" style="text-align: center; margin: 16px 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+  <div style="max-width: 100%; overflow-x: auto;">
+    ${fallbackSvg}
+  </div>
+  ${result.gambar_caption ? `<figcaption style="font-size: 11px; color: #64748b; margin-top: 6px; font-style: italic;">Gambar: ${result.gambar_caption}</figcaption>` : ''}
+</figure>`;
+            }
           }
 
           if (imageTagHtml) {

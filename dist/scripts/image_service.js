@@ -117,11 +117,16 @@ export async function downloadImageAsBase64(imageUrl, timeoutMs = 25000, onStatu
       }
     });
 
-    // Jika server merespons 402 (FREE_LIMIT)
-    if (response.status === 402 && imageUrl.includes("pollinations.ai")) {
+    // Deteksi jika server merespons rate limit (HTTP 402/429 atau header Retry-After / Payment-Required)
+    const isRateLimited = response.status === 402 || 
+                          response.status === 429 || 
+                          Boolean(response.headers.get("retry-after")) || 
+                          response.headers.get("payment-required") === "true";
+
+    if (isRateLimited && imageUrl.includes("pollinations.ai")) {
       const retryHeader = response.headers.get("retry-after");
-      const retrySeconds = retryHeader ? parseInt(retryHeader, 10) : 35;
-      const waitSec = Math.max(retrySeconds, 30);
+      const retrySeconds = retryHeader ? parseInt(retryHeader, 10) : 45;
+      const waitSec = Math.max(retrySeconds, 35);
       
       for (let s = waitSec; s > 0; s--) {
         if (typeof onStatusUpdate === "function") {

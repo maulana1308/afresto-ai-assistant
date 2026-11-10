@@ -748,7 +748,9 @@ STANDAR PENGEMBANGAN MATERI BSKAP NO. 032/H/KR/2024:
      c. <h3>Contoh Terapan & Studi Kasus</h3> (Penerapan langsung konsep dalam permasalahan nyata).
      d. <h3>Rangkuman Konsep Kunci</h3> (Ringkasan poin esensial untuk dipelajari kembali).
 4. Penguatan Visual Multimodal (Diagram / Gambar Ilustrasi):
-   ${includeImage ? `- MODE BERGAMBAR AKTIF: Wajib tentukan stimulus visual konkret yang memperjelas konsep. Tentukan 'butuh_gambar': true, deskripsi 'gambar_prompt' konkret dalam bahasa Inggris, dan caption edukatif. Jika berupa materi matematika, diagram alir, atau sirkuit fisika, Anda juga dapat mengisi 'gambar_svg' (<svg viewBox="0 0 500 250">...</svg>).` : `- Mode gambar: Tidak diaktifkan.`}
+   ${includeImage ? `- MODE BERGAMBAR AKTIF:
+     * PRIORITAS UTAMA UNTUK INFORMATIKA/KODING (HTML/Web/Algoritma), MATEMATIKA, & FISIKA: SANGAT DIWAJIBKAN mengisi 'gambar_svg' (<svg viewBox="0 0 540 260" ...>...</svg>) berupa diagram skematik/vektor mandiri yang tajam dan presisi (misal untuk materi HTML: diagram struktur tag HTML atau mockup jendela browser sederhana; untuk fisika: skema rangkaian; untuk matematika: kurva fungsi). Gambar SVG ini instan, tidak membebani server gambar, dan bebas limit kuota!
+     * Untuk materi Biologi, Geografi, Sejarah, atau Seni Budaya: Isi 'gambar_prompt' konkret dalam bahasa Inggris dan 'gambar_caption' edukatif.` : `- Mode gambar: Tidak diaktifkan.`}
 5. Asesmen Refleksi Mandiri (BSKAP Formative Assessment):
    - ${denganPenugasan ? "Wajib sertakan 2-3 pertanyaan pemantik daya nalar kritis (HOTS / Penalaran Konseptual) untuk menguji pemahaman konsep siswa, bukan sekadar mengingat definisi." : "Tanpa pertanyaan penugasan mandiri."}
 
