@@ -821,6 +821,32 @@ export function extractOptionsFromTable(tblData) {
   return null;
 }
 
+function stripMarkdownMarks(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/\*\*/g, '').replace(/(?<!\*)\*(?!\*)/g, '').trim();
+}
+
+function parseExplicitQuestionType(plainLine) {
+  if (!plainLine || typeof plainLine !== 'string') return null;
+  const m = plainLine.match(/^Tipe\s*(?:Soal)?\s*[:=]\s*(.+)$/i);
+  if (!m) return null;
+  const val = m[1].trim();
+  if (/kompleks|\bpgk\b|multi/i.test(val)) return 'PG_KOMPLEKS';
+  if (/benar\s*(?:atau|\/|-)\s*salah/i.test(val)) return 'BENAR_SALAH';
+  if (/jodoh|cocok|match/i.test(val)) return 'MENCOCOKKAN';
+  if (/isian|singkat/i.test(val)) return 'ISIAN';
+  if (/uraian|es[sa]y/i.test(val)) return 'URAIAN';
+  if (/pilihan\s*ganda|\bpg\b/i.test(val)) return 'PG';
+  return null;
+}
+
+function normalizeExtractedKey(raw) {
+  let cleaned = stripMarkdownMarks(String(raw || '')).replace(/[\_\(\)\[\]\.]/g, '').trim().toUpperCase();
+  if (cleaned === 'TRUE') return 'Benar';
+  if (cleaned === 'FALSE') return 'Salah';
+  return cleaned;
+}
+
 export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   if (!rawText && (!tables || tables.length === 0)) return [];
 
@@ -829,15 +855,18 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   let currentQ = null;
   let inOptions = false;
   let pendingStimulusLines = [];
+  let pendingExplicitTipe = null;
 
   // Regex pemisah nomor butir soal: '1.', '1)', '1:', 'No. 1', '32:' (dengan proteksi angka nominal uang)
   const qNumRegex = /^(?:\*+)?(?:No\.?\s*)?(\d{1,3})[\.\:\)](?!\d{3})\s*(.*)/i;
   // Regex opsi: 'A.', 'B.', 'A:', 'A)', '(A)', '[A]', '**A.**', '**E** **.**', 'E.Laba', serta dukungan 'F.' s.d. 'J.'
   const optRegex = /^\s*(?:\*+|\[|\()?([A-Ja-j])(?:\*+|\))?\s*(?:\*+)?[\.\:\)\]](?:\*+)?\s*(.*)/i;
-  // Regex kunci multilingual: 'Kunci:', 'Jawaban:', 'Answer:', 'Ans:', 'Key:', 'Correct Answer:', 'Réponse:', 'Antwort:'
-  const keyRegex = /^(?:\*+)?(?:Kunci(?:\s+Jawaban)?|Jawaban|Kunci\s+Soal|Answer(?:\s+Key)?|Correct\s+(?:Answer|Option)|Ans|Key|Solution|Réponse|Antwort|Respuesta|解答|答え|الإجابة|الجواب)\s*[:=]\s*(?:[\*\_\(\[])?\s*([A-Ea-e](?:\s*[,&danDan\s]+\s*[A-Ea-e])+|\bBenar\b|\bSalah\b|\bTrue\b|\bFalse\b|[A-Ea-e]|[^\n]+)/i;
-  // Regex pembahasan multilingual: 'Pembahasan:', 'Explanation:', 'Discussion:', 'Solution:'
-  const pembRegex = /^(?:Pembahasan|Penjelasan|Rasionalisasi|Explanation|Discussion|Solution)\s*[:=]\s*(.*)/i;
+  // Regex kunci multilingual: 'Kunci:', 'Jawaban:', 'Answer:', 'Ans:', 'Key:', 'Correct Answer:', 'Réponse:', 'Antwort:' (dicocokkan terhadap plainLine agar tahan bold **KUNCI** : C)
+  const keyRegex = /^(?:Kunci(?:\s+Jawaban)?|Jawaban|Kunci\s+Soal|Answer(?:\s+Key)?|Correct\s+(?:Answer|Option)|Ans|Key|Solution|Réponse|Antwort|Respuesta|解答|答え|الإجابة|الجواب)\s*[:=]\s*(.+)$/i;
+  // Regex kunci inline di akhir baris opsi (misal: 'menggelikan KUNCI : A , D' atau 'perpustakaan KUNCI : A')
+  const trailingKeyRegex = /\s+(?:\*+)?(?:Kunci(?:\s+Jawaban)?|Jawaban|Kunci\s+Soal|Answer(?:\s+Key)?|Correct\s+(?:Answer|Option))(?:\*+)?\s*[:=]\s*([^\n]+)$/i;
+  // Regex pembahasan multilingual (termasuk 'Pembahasan' berdiri sendiri tanpa titik dua)
+  const pembRegex = /^(?:Pembahasan|Penjelasan|Rasionalisasi|Explanation|Discussion|Solution)(?:\s*[:=]\s*(.*)|\s*)$/i;
   // Regex kunci isian dalam kurung di akhir pertanyaan: 'disebut ... (Orbital)' atau '... adalah … (2555 Mn)'
   const parenKeyRegex = /\(\s*([0-9A-Za-z\/\-\s<>_]{1,50})\s*\)\s*(?:\*+)?\s*$/i;
   // Regex baris pernyataan Benar/Salah dengan kunci di akhir: 'Jumlah proton... (Benar)'
@@ -924,9 +953,10 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const plainLine = stripMarkdownMarks(line);
 
     // Cek apakah mulai masuk blok daftar kunci jawaban di akhir naskah (bukan baris kunci per butir)
-    if (!keyRegex.test(line) && /^(?:\*\*|\*)?(?:DAFTAR\s+)?(?:KUNCI(?:\s+JAWABAN)?|ANSWER\s+KEYS?|ANSWERS?|KEYS?|CORRECT\s+ANSWERS?|SOLUTIONS?|مفتاح\s+الإجابة|解答)(?:\s+(?:DAN\s+PEMBAHASAN|SOAL|PAS|PTS|PAT|US|[A-Za-z0-9\s]+))?\s*:?\s*(?:\*\*|\*)?$/i.test(line.trim())) {
+    if (!keyRegex.test(plainLine) && /^(?:DAFTAR\s+)?(?:KUNCI(?:\s+JAWABAN)?|ANSWER\s+KEYS?|ANSWERS?|KEYS?|CORRECT\s+ANSWERS?|SOLUTIONS?|مفتاح\s+الإجابة|解答)(?:\s+(?:DAN\s+PEMBAHASAN|SOAL|PAS|PTS|PAT|US|[A-Za-z0-9\s]+))?\s*:?\s*$/i.test(plainLine)) {
       if (currentQ) {
         questions.push(finalizeQuestion(currentQ, docxImages, tables));
         currentQ = null;
@@ -936,6 +966,42 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
     const isHeadingOrStimulus = /^(?:\*\*|\*)?(?:(?:Read|Bacalah|Perhatikan|Cermati)\s+[\w\s]+(?:questions?|soal|berikut)|TEXT|TEKS|PASSAGE|BACAAN|WACANA|STIMULUS|READING|DIALOG|DIALOGUE|SOAL|PETUNJUK|DIRECTIONS|INSTRUCTIONS|BAGIAN|SECTION|PART|CHAPTER|BAB)\b/i.test(line);
     const isIngredientsOrSteps = /^(?:\*\*|\*|[•\-\*]\s*)?(?:Ingredients?|Steps?|Langkah(?:-langkah)?|Bahan(?:-bahan)?|Cara\s+(?:Membuat|Kerja)|Alat\s+dan\s+Bahan|Tahapan?)\s*[:=]/i.test(line);
+
+    // Cek apakah ini baris deklarasi eksplisit "Tipe Soal: ..." (seperti ekspor Afresto CBT)
+    const explicitTypeDetected = parseExplicitQuestionType(plainLine);
+    if (explicitTypeDetected) {
+      const currentHasBody = currentQ && (
+        currentQ.pertanyaanLines.some(l => l.trim().length > 0) ||
+        Object.keys(currentQ.opsi).length > 0 ||
+        !!currentQ.gambarTag ||
+        !!currentQ.kunci ||
+        !!currentQ.inPembahasan ||
+        (currentQ.bsItems && currentQ.bsItems.length > 0)
+      );
+      if (!currentQ || currentHasBody) {
+        if (currentQ) {
+          questions.push(finalizeQuestion(currentQ, docxImages, tables));
+        }
+        currentQ = {
+          id: questions.length + 1,
+          originalIndex: questions.length + 1,
+          pertanyaanLines: pendingStimulusLines.length > 0 ? [...pendingStimulusLines] : [],
+          stimulus: pendingStimulusLines.length > 0 ? pendingStimulusLines.join('\n').trim() : null,
+          opsi: {},
+          kunci: '',
+          pembahasan: '',
+          tipe: 'PG',
+          explicitTipe: explicitTypeDetected,
+          pasangan: [],
+          gambarTag: null
+        };
+        pendingStimulusLines = [];
+        inOptions = false;
+      } else {
+        currentQ.explicitTipe = explicitTypeDetected;
+      }
+      continue;
+    }
 
     // Jika sedang dalam opsi dan menemui heading / stimulus baru, finalisasi soal sebelumnya
     if (inOptions && (isHeadingOrStimulus || isIngredientsOrSteps)) {
@@ -990,21 +1056,46 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         continue;
       }
 
+      const rawQText = qMatch[2];
+      const plainQText = stripMarkdownMarks(rawQText);
+      const numLineExplicitType = parseExplicitQuestionType(plainQText);
+      const qLabelMatch = !numLineExplicitType ? plainQText.match(/^(?:Pertanyaan|Soal)\s*[:=]\s*(.*)$/i) : null;
+      const cleanInitialQText = numLineExplicitType
+        ? ''
+        : (qLabelMatch ? qLabelMatch[1].trim() : rawQText);
+
+      // Jika currentQ sebelumnya baru dibuat dari baris unnumbered "Tipe Soal:" dan belum memiliki isi pertanyaan/opsi/gambar, pakai ulang tanpa buat butir hantu
+      const reuseEmptyCurrentQ = currentQ &&
+        !currentQ.pertanyaanLines.some(l => l.trim().length > 0) &&
+        Object.keys(currentQ.opsi).length === 0 &&
+        !currentQ.gambarTag &&
+        !currentQ.kunci &&
+        (!currentQ.bsItems || currentQ.bsItems.length === 0);
+
+      if (reuseEmptyCurrentQ) {
+        currentQ.id = parseInt(qMatch[1], 10);
+        if (numLineExplicitType) currentQ.explicitTipe = numLineExplicitType;
+        if (cleanInitialQText) currentQ.pertanyaanLines.push(cleanInitialQText);
+        inOptions = false;
+        continue;
+      }
+
       if (currentQ) {
         questions.push(finalizeQuestion(currentQ, docxImages, tables));
       }
 
-      const qText = qMatch[2];
-      let initialPertanyaanLines;
+      let initialPertanyaanLines = [];
       if (pendingStimulusLines.length > 0) {
         const lastStimLine = pendingStimulusLines[pendingStimulusLines.length - 1];
-        if (lastStimLine !== '') {
-          initialPertanyaanLines = [...pendingStimulusLines, '', qText];
+        if (cleanInitialQText) {
+          initialPertanyaanLines = lastStimLine !== ''
+            ? [...pendingStimulusLines, '', cleanInitialQText]
+            : [...pendingStimulusLines, cleanInitialQText];
         } else {
-          initialPertanyaanLines = [...pendingStimulusLines, qText];
+          initialPertanyaanLines = [...pendingStimulusLines];
         }
-      } else {
-        initialPertanyaanLines = [qText];
+      } else if (cleanInitialQText) {
+        initialPertanyaanLines = [cleanInitialQText];
       }
       const stimulusText = pendingStimulusLines.length > 0
         ? pendingStimulusLines.join('\n').trim()
@@ -1020,9 +1111,11 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         kunci: '',
         pembahasan: '',
         tipe: 'PG',
+        explicitTipe: numLineExplicitType || pendingExplicitTipe || null,
         pasangan: [],
         gambarTag: null
       };
+      pendingExplicitTipe = null;
       inOptions = false;
       continue;
     }
@@ -1040,35 +1133,61 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue; // Belum masuk butir soal (misal KOP naskah)
     }
 
-    // Cek baris pembahasan
-    const pembMatch = line.match(pembRegex);
+    // Lewati label murni 'Pertanyaan:' / 'Soal:' agar tidak mengotori badan teks pertanyaan
+    if (!inOptions && !currentQ.inPembahasan) {
+      const pLabelMatch = plainLine.match(/^(?:Pertanyaan|Soal)\s*[:=]\s*(.*)$/i);
+      if (pLabelMatch) {
+        if (pLabelMatch[1].trim()) {
+          currentQ.pertanyaanLines.push(pLabelMatch[1].trim());
+        }
+        continue;
+      }
+    }
+
+    // Cek baris pembahasan (termasuk 'Pembahasan' berdiri sendiri tanpa titik dua)
+    const pembMatch = plainLine.match(pembRegex);
     if (pembMatch) {
-      currentQ.pembahasan = pembMatch[1].trim();
+      currentQ.pembahasan = (pembMatch[1] || '').trim();
+      currentQ.inPembahasan = true;
+      inOptions = false;
       continue;
     }
 
-    // Cek baris kunci langsung di bawah soal
-    const keyMatch = line.match(keyRegex);
+    // Cek baris kunci langsung di bawah soal (gunakan plainLine agar tahan format **KUNCI** : C , D)
+    const keyMatch = plainLine.match(keyRegex);
     if (keyMatch) {
-      let rawKey = keyMatch[1].replace(/[\*\_\(\)\[\]\.]/g, '').trim().toUpperCase();
-      if (rawKey === 'TRUE') rawKey = 'Benar';
-      else if (rawKey === 'FALSE') rawKey = 'Salah';
-      currentQ.kunci = rawKey;
+      currentQ.kunci = normalizeExtractedKey(keyMatch[1]);
+      currentQ.hasExplicitKey = true;
+      currentQ.inPembahasan = false;
       continue;
+    }
+
+    // Cek kunci inline yang menempel di akhir baris opsi (misal: 'C. menggelikan KUNCI : A , D')
+    let workingLine = line;
+    const trailKeyMatch = (inOptions || optRegex.test(line)) ? line.match(trailingKeyRegex) : null;
+    if (trailKeyMatch) {
+      currentQ.kunci = normalizeExtractedKey(trailKeyMatch[1]);
+      currentQ.hasExplicitKey = true;
+      workingLine = line.slice(0, trailKeyMatch.index).trim();
     }
 
     // Cek opsi horizontal dalam satu baris (misal: A. apel   B. mangga   C. jeruk atau A: apel B: mangga)
     const inlineOptRegex = /(?:^|[\t\s]{2,}|\t|\s+(?=(?:\*\*|\*|\[\s*\]|\(\s*\))?[A-Ja-j][\.\:\)]))(?:\*\*|\*|\[\s*\]|\(\s*\))?([A-Ja-j])[\.\:\)]\s*(.*?)(?=(?:[\t\s]{2,}|\t|\s+(?=(?:\*\*|\*|\[\s*\]|\(\s*\))?[A-Ja-j][\.\:\)]))(?:\*\*|\*|\[\s*\]|\(\s*\))?[A-Ja-j][\.\:\)]|$)/gi;
     const inlineMatches = [];
     let inlineM;
-    while ((inlineM = inlineOptRegex.exec(line)) !== null) {
-      if (inlineM[1] && inlineM[2].trim()) {
+    while ((inlineM = inlineOptRegex.exec(workingLine)) !== null) {
+      const letter = inlineM[1] ? inlineM[1].toUpperCase() : '';
+      const val = inlineM[2] ? inlineM[2].trim() : '';
+      const prevLetter = inlineMatches.length > 0 ? inlineMatches[inlineMatches.length - 1][1].toUpperCase() : '';
+      const isTrailingNextOpt = inlineMatches.length > 0 && val === '' && letter.charCodeAt(0) === prevLetter.charCodeAt(0) + 1;
+      if (letter && (val !== '' || isTrailingNextOpt)) {
         inlineMatches.push(inlineM);
       }
     }
 
     if (inlineMatches.length > 1) {
       inOptions = true;
+      currentQ.inPembahasan = false;
       for (const m of inlineMatches) {
         let letter = m[1].toUpperCase();
         const fToJ = { 'F': 'A', 'G': 'B', 'H': 'C', 'I': 'D', 'J': 'E' };
@@ -1079,7 +1198,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         let optText = m[2].trim();
         if (!currentQ.boldOptions) currentQ.boldOptions = [];
         if (m[0].includes('**') || m[0].startsWith('*')) {
-          currentQ.kunci = letter;
+          if (!currentQ.hasExplicitKey) currentQ.kunci = letter;
           if (!currentQ.boldOptions.includes(letter)) {
             currentQ.boldOptions.push(letter);
           }
@@ -1091,9 +1210,10 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     }
 
     // Cek baris opsi tunggal A-E (atau F-J)
-    const optMatch = line.match(optRegex);
+    const optMatch = workingLine.match(optRegex);
     if (optMatch) {
       inOptions = true;
+      currentQ.inPembahasan = false;
       let letter = optMatch[1].toUpperCase();
       const fToJ = { 'F': 'A', 'G': 'B', 'H': 'C', 'I': 'D', 'J': 'E' };
       if (fToJ[letter] && (currentQ.isFToJ || letter === 'F')) {
@@ -1104,8 +1224,8 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
       // Jika opsi dicetak tebal (baik di huruf maupun di teks kalimat), tandai sebagai kunci!
       if (!currentQ.boldOptions) currentQ.boldOptions = [];
-      if (line.includes('**') || line.startsWith('*')) {
-        currentQ.kunci = letter;
+      if (workingLine.includes('**') || workingLine.startsWith('*')) {
+        if (!currentQ.hasExplicitKey) currentQ.kunci = letter;
         if (!currentQ.boldOptions.includes(letter)) {
           currentQ.boldOptions.push(letter);
         }
@@ -1122,6 +1242,12 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue;
     }
 
+    // Jika sedang di dalam blok Pembahasan, tambahkan ke pembahasan (jangan merusak opsi atau pertanyaan)
+    if (currentQ.inPembahasan) {
+      currentQ.pembahasan = (currentQ.pembahasan ? currentQ.pembahasan + '\n' : '') + plainLine;
+      continue;
+    }
+
     // Cek pernyataan Benar/Salah dengan kunci di akhir (misal: 'Jumlah proton... (Benar)')
     const bsMatch = line.match(bsLineRegex);
     if (bsMatch && !inOptions) {
@@ -1134,8 +1260,11 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     }
 
     // Cek kunci isian dalam kurung di akhir pertanyaan (misal: 'disebut ... (Orbital)' atau 'adalah … (2555 Mn)')
+    // Lindungi instruksi pilihan seperti '(Pilih 3)', '(Pilih 2)', '(HOTS)' agar TIDAK dianggap sebagai kunci isian singkat!
     const parenMatch = line.match(parenKeyRegex);
-    if (parenMatch && !inOptions && !line.includes('|') && !line.match(/\b(?:19|20)\d{2}\b/)) {
+    const isInstructionParen = parenMatch && /^(?:pilih|choose|select|hots|mots|lots|c[1-6]|poin|skor|bobot)\b/i.test(parenMatch[1].trim());
+    const explicitNonIsian = currentQ.explicitTipe === 'PG' || currentQ.explicitTipe === 'PG_KOMPLEKS' || currentQ.explicitTipe === 'BENAR_SALAH';
+    if (parenMatch && !isInstructionParen && !explicitNonIsian && !inOptions && !line.includes('|') && !line.match(/\b(?:19|20)\d{2}\b/)) {
       currentQ.kunci = parenMatch[1].trim();
       const cleanLine = line.replace(parenKeyRegex, '').trim();
       currentQ.pertanyaanLines.push(cleanLine);
@@ -1163,12 +1292,13 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       // Jika sudah masuk opsi tapi ada baris lanjutan, sambungkan ke opsi terakhir
       const lastKey = Object.keys(currentQ.opsi).pop();
       if (lastKey) {
-        if (line.includes('**')) {
+        if (!currentQ.hasExplicitKey && workingLine.includes('**')) {
           currentQ.kunci = lastKey;
           if (!currentQ.boldOptions) currentQ.boldOptions = [];
           if (!currentQ.boldOptions.includes(lastKey)) currentQ.boldOptions.push(lastKey);
         }
-        currentQ.opsi[lastKey] += ' ' + line.replace(/\*\*/g, '').trim();
+        const extraText = workingLine.replace(/\*\*/g, '').trim();
+        currentQ.opsi[lastKey] = currentQ.opsi[lastKey] ? (currentQ.opsi[lastKey] + ' ' + extraText) : extraText;
       }
     }
   }
@@ -1569,31 +1699,37 @@ function finalizeQuestion(q, docxImages, tables = []) {
     pertanyaan = pertanyaan.replace(q.tableOptionsTag, '').trim();
   }
 
-  // 1. Deteksi Benar/Salah jika opsi A-E berakhiran (Benar)/(Salah) atau pertanyaan mengandung 'benar atau salah'
+  // 1. Deteksi Benar/Salah dari header Tipe Soal eksplisit, opsi berakhiran (Benar)/(Salah), atau prompt
   const optValues = Object.values(q.opsi || {});
   const isAllBs = optValues.length >= 2 && optValues.every(val => /\(\s*(Benar|Salah)\s*\)$/i.test(val.trim()));
   const promptHasBs = /benar\s*(?:atau|\/|-)\s*salah/i.test(pertanyaan);
 
-  if (isAllBs || (promptHasBs && optValues.length >= 2)) {
+  if (q.explicitTipe === 'BENAR_SALAH' || isAllBs || (promptHasBs && optValues.length >= 2)) {
     tipe = 'BENAR_SALAH';
-    const cleanOpsi = {};
-    const bsKunci = {};
-    const hasBoldOptions = q.boldOptions && q.boldOptions.length > 0;
-    for (const [letter, val] of Object.entries(q.opsi)) {
-      const bsMatch = val.match(/\(\s*(Benar|Salah)\s*\)$/i);
-      if (bsMatch) {
-        cleanOpsi[letter] = val.replace(/\(\s*(Benar|Salah)\s*\)$/i, '').trim();
-        bsKunci[letter] = bsMatch[1].toLowerCase() === 'benar' ? 'Benar' : 'Salah';
-      } else if (hasBoldOptions) {
-        cleanOpsi[letter] = val.trim();
-        bsKunci[letter] = q.boldOptions.includes(letter) ? 'Benar' : 'Salah';
-      } else {
-        cleanOpsi[letter] = val.trim();
-        bsKunci[letter] = 'Benar';
+    if (optValues.length > 0) {
+      const cleanOpsi = {};
+      const bsKunci = {};
+      const hasBoldOptions = q.boldOptions && q.boldOptions.length > 0;
+      for (const [letter, val] of Object.entries(q.opsi)) {
+        const bsMatch = val.match(/\(\s*(Benar|Salah)\s*\)$/i);
+        if (bsMatch) {
+          cleanOpsi[letter] = val.replace(/\(\s*(Benar|Salah)\s*\)$/i, '').trim();
+          bsKunci[letter] = bsMatch[1].toLowerCase() === 'benar' ? 'Benar' : 'Salah';
+        } else if (hasBoldOptions) {
+          cleanOpsi[letter] = val.trim();
+          bsKunci[letter] = q.boldOptions.includes(letter) ? 'Benar' : 'Salah';
+        } else {
+          cleanOpsi[letter] = val.trim();
+          bsKunci[letter] = 'Benar';
+        }
       }
+      q.opsi = cleanOpsi;
+      kunci = bsKunci;
+    } else {
+      // Pernyataan Benar/Salah berada di dalam gambar/screenshot tersemat; tetap kunci tipe BENAR_SALAH
+      q.opsi = {};
+      kunci = (kunci && typeof kunci === 'object' && !Array.isArray(kunci)) ? kunci : {};
     }
-    q.opsi = cleanOpsi;
-    kunci = bsKunci;
   }
   // 2. Deteksi Benar/Salah dari daftar baris pernyataan terpisah
   else if (q.bsItems && q.bsItems.length > 0) {
@@ -1673,13 +1809,27 @@ function finalizeQuestion(q, docxImages, tables = []) {
     }
   }
 
-  // 4. Deteksi tipe PG Kompleks jika kunci berisi koma atau lebih dari 1 opsi di-bold
-  if (tipe === 'PG' && q.boldOptions && q.boldOptions.length > 1) {
+  // 4. Deteksi tipe PG Kompleks dari header Tipe Soal eksplisit, kunci jamak, atau >1 opsi di-bold (jika tanpa kunci eksplisit)
+  if (tipe === 'PG' && q.explicitTipe === 'PG_KOMPLEKS') {
+    tipe = 'PG_KOMPLEKS';
+    if (Array.isArray(kunci)) {
+      kunci = kunci.map(x => String(x).trim().toUpperCase()).filter(Boolean);
+    } else if (typeof kunci === 'string') {
+      const parsedKeys = kunci.split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-F]$/.test(x));
+      if (parsedKeys.length > 0) {
+        kunci = parsedKeys;
+      } else if (!q.hasExplicitKey && q.boldOptions && q.boldOptions.length > 0) {
+        kunci = q.boldOptions;
+      } else {
+        kunci = ['A'];
+      }
+    }
+  } else if (tipe === 'PG' && !q.hasExplicitKey && q.explicitTipe !== 'PG' && q.boldOptions && q.boldOptions.length > 1) {
     tipe = 'PG_KOMPLEKS';
     kunci = q.boldOptions;
-  } else if (tipe === 'PG' && typeof kunci === 'string' && /^[A-Ea-e][\s,]+[A-Ea-e]/.test(kunci)) {
+  } else if (tipe === 'PG' && typeof kunci === 'string' && /^[A-Fa-f](?:[\s,;]+[A-Fa-f])+$/.test(kunci.trim())) {
     tipe = 'PG_KOMPLEKS';
-    kunci = kunci.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
+    kunci = kunci.trim().split(/[\s,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
   }
 
   // 4b. Deteksi Mencocokkan berbasis baris pasangan (1. Router - Mengarahkan...) atau kunci format "1-A, 2-B"
@@ -1736,14 +1886,15 @@ function finalizeQuestion(q, docxImages, tables = []) {
   }
 
   // 5. Deteksi Isian Singkat dengan kunci dalam kurung di akhir: '... disebut ... (Orbital)' atau '... (2555 Mn)'
+  const allowOpenEndedFallback = Object.keys(q.opsi).length === 0 && (!q.pasangan || q.pasangan.length === 0) && tipe !== 'BENAR_SALAH' && tipe !== 'PG_KOMPLEKS' && q.explicitTipe !== 'PG';
   const parenMatch = pertanyaan.match(/\(\s*([0-9A-Za-z\/\-\s<>_]{1,50})\s*\)\s*(?:\*+)?\s*$/i);
-  if (parenMatch && Object.keys(q.opsi).length === 0 && (!q.pasangan || q.pasangan.length === 0) && tipe !== 'BENAR_SALAH') {
+  if (parenMatch && allowOpenEndedFallback && q.explicitTipe !== 'URAIAN') {
     tipe = 'ISIAN';
     const rawVal = parenMatch[1].trim();
     kunci = /(?<!<)\//.test(rawVal) ? rawVal.split(/\s*(?<!<)\/\s*/).map(k => k.trim()).filter(Boolean) : [rawVal];
     pertanyaan = pertanyaan.replace(/\(\s*([0-9A-Za-z\/\-\s<>_]{1,50})\s*\)\s*(?:\*+)?\s*$/i, '').trim();
-  } else if (Object.keys(q.opsi).length === 0 && (!q.pasangan || q.pasangan.length === 0) && tipe !== 'BENAR_SALAH') {
-    const isUraianText = /^(?:rubrik|uraian|penjelasan|langkah|jelaskan)/i.test(String(kunci).trim()) || pertanyaan.toLowerCase().startsWith('jelaskan');
+  } else if (allowOpenEndedFallback) {
+    const isUraianText = q.explicitTipe === 'URAIAN' || /^(?:rubrik|uraian|penjelasan|langkah|jelaskan)/i.test(String(kunci).trim()) || pertanyaan.toLowerCase().startsWith('jelaskan');
     const hasAltSlash = /(?<!<)\//.test(String(kunci));
     if (kunci && !isUraianText && (hasAltSlash || (typeof kunci === 'string' && kunci.length < 60)) && kunci !== 'A') {
       tipe = 'ISIAN';
@@ -1795,10 +1946,10 @@ function finalizeQuestion(q, docxImages, tables = []) {
     pertanyaan = pertanyaan.replace(/\[TABEL_\d+\]/g, '').trim();
   }
 
-  // 7. Normalisasi formula, eksponen pangkat, dan subskrip/superskrip
+  // 7. Normalisasi formula, eksponen pangkat, dan subskrip/superskrip (urutkan kunci opsi A..F)
   pertanyaan = normalizeFormulasAndSuperscripts(pertanyaan);
   const cleanNormalizedOpsi = {};
-  for (const [k, v] of Object.entries(q.opsi || {})) {
+  for (const [k, v] of Object.entries(q.opsi || {}).sort(([a], [b]) => a.localeCompare(b))) {
     // Bersihkan tanda ** dari opsi agar tidak ada asterisks mentah di UI
     let cleanVal = typeof v === 'string' ? v.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*\*/g, '') : v;
     cleanNormalizedOpsi[k] = normalizeFormulasAndSuperscripts(cleanVal);

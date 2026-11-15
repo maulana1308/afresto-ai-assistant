@@ -123,13 +123,16 @@
 
     <!-- 3. Form Generator Soal -->
     <main class="main-content">
-      <!-- Navigasi Modul Utama: Soal Evaluasi vs Materi & Bahan Ajar -->
+      <!-- Navigasi Modul Utama: Soal Evaluasi vs Materi & Bahan Ajar vs Konverter Afresto Next -->
       <div class="module-segmented-nav" role="tablist" aria-label="Pilihan Modul Afresto">
         <button type="button" id="tab-module-soal" class="module-tab-btn active" role="tab" aria-selected="true">
           <span>📝</span> Soal Asesmen
         </button>
         <button type="button" id="tab-module-materi" class="module-tab-btn" role="tab" aria-selected="false">
-          <span>📚</span> Materi &amp; Bahan Ajar
+          <span>📚</span> Materi Ajar
+        </button>
+        <button type="button" id="tab-module-konverter" class="module-tab-btn" role="tab" aria-selected="false">
+          <span>🔄</span> Konverter Next
         </button>
       </div>
 
@@ -397,6 +400,10 @@
               <span class="btn-text">⚡ Impor ke Daftar Soal</span>
               <span class="spinner hidden"></span>
             </button>
+
+            <button type="button" id="btn-open-bridge-converter" class="btn btn-outline-primary btn-block" style="margin-top: 8px; font-size: 11.5px;">
+              🔄 Buka Konverter Mandiri (Legacy ke Afresto Next)
+            </button>
           </div>
         </div>
         <!-- /#docx-ingestion-container -->
@@ -422,6 +429,7 @@
             <button id="btn-sort-type" class="btn-xs btn-secondary" title="Urutkan rapi kembali ke nomor urut semula">Urut</button>
             <button id="btn-reset-status" class="btn-xs btn-secondary" title="Kembalikan status semua butir soal menjadi siap diinput">Reset</button>
             <button id="btn-shuffle" class="btn-xs btn-secondary" title="Acak urutan nomor butir">Acak</button>
+            <button id="btn-export-next-docx" class="btn-xs btn-outline-primary" title="Unduh daftar soal ini menjadi berkas Word (.docx) standar Afresto Next">📤 Afresto Next (.docx)</button>
           </div>
           <div class="toolbar-right">
             <button id="btn-clear-playlist" class="btn-xs btn-danger-pill" title="Kosongkan seluruh daftar antrean soal">🗑️ Hapus Semua</button>
@@ -697,6 +705,54 @@
           </div>
         </section>
       </div>
+      <!-- /#module-materi-wrapper -->
+
+      <!-- MODUL 3: KONVERTER AFRESTO LEGACY KE AFRESTO NEXT -->
+      <div id="module-konverter-wrapper" class="hidden">
+        <section class="card" id="konverter-active-card">
+          <div class="card-header">
+            <h2 class="card-title">🔄 Konversi Cepat ke Afresto Next</h2>
+            <span id="conv-tab-active-badge" class="badge badge-neutral">0 Soal</span>
+          </div>
+          <p class="text-muted" id="conv-tab-active-desc" style="font-size: 11.5px; margin-bottom: 10px;">
+            Soal yang sudah dimuat di daftar antrean bisa langsung diunduh menjadi Word format Afresto Next tanpa perlu pilih ulang file dari komputer.
+          </p>
+          <div id="conv-tab-active-actions" class="hidden" style="display: flex; flex-direction: column; gap: 8px;">
+            <div id="conv-tab-active-stats" style="font-size: 11.5px; color: var(--text-primary); background: var(--bg-surface-elevated); padding: 8px 10px; border-radius: var(--radius-item); border: 1px solid var(--border-default);"></div>
+            <button type="button" id="btn-conv-tab-export-active" class="btn btn-primary btn-block btn-lg">
+              📤 Unduh Word Afresto Next (.docx)
+            </button>
+          </div>
+        </section>
+
+        <section class="card" id="konverter-upload-card">
+          <div class="card-header">
+            <h2 class="card-title">📄 Konversi File Word Baru (.docx)</h2>
+          </div>
+          <div class="docx-drop-box" id="conv-tab-drop-box" tabindex="0" role="button" aria-label="Unggah Word Afresto Legacy">
+            <div class="docx-drop-icon" aria-hidden="true">📂</div>
+            <div class="docx-drop-title">Tarik &amp; Lepas File Afresto Legacy (.docx)</div>
+            <p class="docx-drop-sub">atau <span class="docx-browse-link">pilih berkas dari perangkat</span></p>
+            <input type="file" id="conv-tab-file-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;">
+          </div>
+
+          <div id="conv-tab-file-panel" class="hidden" style="margin-top: 10px;">
+            <div id="conv-tab-file-meta" style="font-size: 12px; font-weight: 700; margin-bottom: 6px; word-break: break-word;"></div>
+            <div id="conv-tab-file-stats" style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;"></div>
+            <div id="conv-tab-bs-warning" class="alert hidden" style="margin-bottom: 8px; font-size: 11px;"></div>
+            <button type="button" id="btn-conv-tab-export-file" class="btn btn-primary btn-block btn-lg">
+              📤 Unduh Hasil Konversi (.docx)
+            </button>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <button type="button" id="btn-conv-tab-open-full" class="btn btn-outline-primary btn-block" style="font-size: 11.5px;">
+              🖥️ Buka Tampilan Lebar di Tab Browser
+            </button>
+          </div>
+        </section>
+      </div>
+      <!-- /#module-konverter-wrapper -->
     </main>
   </div>
 

@@ -5,6 +5,7 @@
 
 import { GeminiService, ALLOWED_MODELS } from '../scripts/gemini.js';
 import { parseDocx } from '../scripts/docx_parser.js';
+import { buildAfrestoNextDocx } from '../scripts/afresto_next_exporter.js';
 import { validateQuestionCompleteness } from '../scripts/question_validator.js';
 import {
   IMAGE_STYLES,
@@ -99,6 +100,8 @@ const btnOpenPreview = document.getElementById('btn-open-preview');
 const btnLaunchStudioBanner = document.getElementById('btn-launch-studio-banner');
 const btnSortType = document.getElementById('btn-sort-type');
 const btnShuffle = document.getElementById('btn-shuffle');
+const btnExportNextDocx = document.getElementById('btn-export-next-docx');
+const btnOpenBridgeConverter = document.getElementById('btn-open-bridge-converter');
 const btnClearPlaylist = document.getElementById('btn-clear-playlist');
 const btnResetStatus = document.getElementById('btn-reset-status');
 const btnAutoInputAll = document.getElementById('btn-auto-input-all');
@@ -465,10 +468,14 @@ function updateKeyBadge(text, state) {
 // 2. DETEKSI STATUS HALAMAN AFRESTO
 // ------------------------------------------------------------------------
 
-let currentActiveModule = 'soal'; // 'soal' | 'materi'
+let currentActiveModule = 'soal'; // 'soal' | 'materi' | 'konverter'
 
 async function checkActiveTabStatus() {
   try {
+    if (currentActiveModule === 'konverter') {
+      updateStatusBanner(true, "Mode Offline: Konverter Word ke format Afresto Next siap digunakan.");
+      return;
+    }
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab.id) {
       updateStatusBanner(false, "Tidak ada tab aktif.");
@@ -1306,7 +1313,7 @@ function setGenerateLoading(isLoading) {
 function renderQuestionNavigator(questions) {
   if (!questionNavBar || !questionNavGrid) return;
 
-  if (!questions || questions.length === 0) {
+  if (!questions || questions.length === 0 || currentActiveModule !== 'soal') {
     questionNavBar.classList.add('hidden');
     return;
   }
@@ -1417,10 +1424,12 @@ function renderQuestionsList() {
   if (!currentQuestions || currentQuestions.length === 0) {
     resultsSection.classList.add('hidden');
     renderQuestionNavigator([]);
+    renderKonverterTabState();
     return;
   }
 
   resultsSection.classList.remove('hidden');
+  renderKonverterTabState();
 
   const total = currentQuestions.length;
   const injectedCount = currentQuestions.filter(q => q.status === "INJECTED").length;
@@ -1533,8 +1542,11 @@ function renderQuestionsList() {
     let kunciDisplay = "";
     if (q.tipe === "PG") kunciDisplay = `Kunci: ${q.kunci}`;
     else if (q.tipe === "PG_KOMPLEKS") kunciDisplay = `Kunci: ${Array.isArray(q.kunci) ? q.kunci.join(", ") : q.kunci}`;
-    else if (q.tipe === "BENAR_SALAH" && typeof q.kunci === "object") {
-      kunciDisplay = `Kunci: ` + Object.entries(q.kunci).map(([k, v]) => `${k}:${v}`).join(", ");
+    else if (q.tipe === "BENAR_SALAH") {
+      const bsEntries = (q.kunci && typeof q.kunci === "object") ? Object.entries(q.kunci) : [];
+      kunciDisplay = bsEntries.length > 0
+        ? `Kunci: ` + bsEntries.map(([k, v]) => `${k}:${v}`).join(", ")
+        : `Pernyataan ada di gambar — klik Edit atau gunakan AI Gemini`;
     }
     else if (q.tipe === "MENCOCOKKAN") kunciDisplay = `Kunci: ${q.kunci || "Relasi Pasangan Sesuai Baris"}`;
     else if (q.tipe === "ISIAN") kunciDisplay = `Kunci: ${Array.isArray(q.kunci) ? q.kunci.join(" / ") : q.kunci}`;
@@ -1586,9 +1598,11 @@ function renderQuestionsList() {
 
     if (!check.isValid) {
       validationBadge = `<span class="badge-invalid-warning" title="${check.issues.join(' | ')}">⚠️ ${check.issues[0]}</span>`;
+      const showOcrBtn = q.tipe === 'BENAR_SALAH' && Boolean(q.gambar_base64);
       singleBtnHtml = `
-        <div style="display: flex; gap: 6px; align-items: center;">
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
           <span style="font-size: 10px; color: var(--accent-rose); font-weight: 600;">⚠️ Opsi belum lengkap</span>
+          ${showOcrBtn ? `<button class="btn-xs btn-outline-primary btn-ocr-bs-q" data-index="${index}" title="Baca isi pernyataan Benar/Salah di gambar memakai Gemini AI">🔍 Baca Gambar (AI)</button>` : ''}
           <button class="btn-xs btn-primary btn-edit-q" data-index="${index}" title="Lengkapi butir ini agar dapat diinput">✏️ Lengkapi</button>
         </div>
       `;
@@ -1828,6 +1842,40 @@ function renderQuestionsList() {
       await chrome.storage.local.set({ last_questions: currentQuestions });
       renderQuestionsList();
       alert(`🎉 Berhasil menerapkan teks bacaan ke Soal #${startNum} s.d. #${endNum} (${appliedCount} butir diselaraskan)!`);
+    });
+  });
+
+  // Pasang event listener untuk OCR gambar pernyataan Benar/Salah via Gemini AI
+  document.querySelectorAll('.btn-ocr-bs-q').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const targetBtn = e.currentTarget;
+      const idx = Number(targetBtn.getAttribute('data-index'));
+      const q = currentQuestions[idx];
+      if (!q || !q.gambar_base64) return;
+      if (!userApiKey) {
+        if (settingsPanel) settingsPanel.classList.remove('hidden');
+        if (typeof showSettingsAlert === 'function') {
+          showSettingsAlert('Masukkan Kunci API Gemini terlebih dahulu untuk membaca gambar soal, atau lengkapi manual lewat tombol Lengkapi.', false);
+        }
+        return;
+      }
+      targetBtn.disabled = true;
+      targetBtn.textContent = '⏳ Membaca...';
+      try {
+        const gemini = new GeminiService(userApiKey, selectedModel);
+        const extracted = await gemini.extractBenarSalahFromImage(q.gambar_base64, q.pertanyaan || '');
+        q.opsi = extracted.opsi;
+        q.kunci = extracted.kunci;
+        q._ocrExtracted = true;
+        q.gambar_base64 = null; // Hapus screenshot agar kunci tidak bocor ke siswa
+        q.validation = validateQuestionCompleteness(q, idx);
+        await chrome.storage.local.set({ last_questions: currentQuestions });
+        renderQuestionsList();
+      } catch (err) {
+        alert(`Gagal membaca gambar soal #${idx + 1}: ${err.message}`);
+        targetBtn.disabled = false;
+        targetBtn.textContent = '🔍 Baca Gambar (AI)';
+      }
     });
   });
 
@@ -2160,6 +2208,153 @@ btnShuffle.addEventListener('click', () => {
   chrome.storage.local.set({ last_questions: currentQuestions });
   renderQuestionsList();
 });
+
+let convTabFileQuestions = [];
+let convTabFileName = 'Bank_Soal';
+
+function countQuestionTypes(list) {
+  const counts = { PG: 0, PG_KOMPLEKS: 0, BENAR_SALAH: 0, MENCOCOKKAN: 0, LAINNYA: 0 };
+  for (const q of list || []) {
+    const t = String(q?.tipe || 'PG').toUpperCase();
+    if (counts[t] !== undefined) counts[t]++;
+    else counts.LAINNYA++;
+  }
+  return counts;
+}
+
+function getPendingImageBsCount(list) {
+  return (list || []).filter(
+    q => q?.tipe === 'BENAR_SALAH' && Object.keys(q.opsi || {}).length < 2 && q.gambar_base64
+  ).length;
+}
+
+function renderKonverterTabState() {
+  const activeBadge = document.getElementById('conv-tab-active-badge');
+  const activeDesc = document.getElementById('conv-tab-active-desc');
+  const activeActions = document.getElementById('conv-tab-active-actions');
+  const activeStats = document.getElementById('conv-tab-active-stats');
+  if (!activeBadge || !activeDesc || !activeActions || !activeStats) return;
+
+  const list = Array.isArray(currentQuestions) ? currentQuestions : [];
+  activeBadge.textContent = `${list.length} Soal`;
+
+  if (list.length === 0) {
+    activeActions.classList.add('hidden');
+    activeDesc.textContent = 'Belum ada soal di antrean aktif. Anda dapat langsung mengekspor begitu soal dimuat di menu Soal, atau tarik file .docx di bawah.';
+    return;
+  }
+
+  const c = countQuestionTypes(list);
+  const pendingBs = getPendingImageBsCount(list);
+  const parts = [`PG: ${c.PG}`, `PGK: ${c.PG_KOMPLEKS}`, `B/S: ${c.BENAR_SALAH}`];
+  if (c.MENCOCOKKAN > 0) parts.push(`Cocok: ${c.MENCOCOKKAN}`);
+  if (c.LAINNYA > 0) parts.push(`Lainnya: ${c.LAINNYA}`);
+
+  activeDesc.textContent = 'Soal dari daftar antrean siap langsung dikonversi tanpa memilih ulang file dari perangkat.';
+  activeStats.textContent = parts.join(' • ') + (pendingBs > 0 ? ` (${pendingBs} B/S bergambar)` : '');
+  activeActions.classList.remove('hidden');
+}
+
+function openConverterFullscreenTab(preloadList, preloadName) {
+  const listToLoad = Array.isArray(preloadList) && preloadList.length > 0
+    ? preloadList
+    : (convTabFileQuestions.length > 0 ? convTabFileQuestions : currentQuestions);
+  const nameToUse = preloadName || (convTabFileQuestions.length > 0 ? convTabFileName : (inputMapel?.value || 'Bank_Soal'));
+  const targetUrl = chrome.runtime.getURL('converter.html');
+
+  if (Array.isArray(listToLoad) && listToLoad.length > 0) {
+    chrome.storage.local.set({
+      afresto_converter_preload: { fileName: nameToUse, questions: listToLoad }
+    }, () => chrome.tabs.create({ url: targetUrl }));
+  } else {
+    chrome.tabs.create({ url: targetUrl });
+  }
+}
+
+async function exportQuestionsToAfrestoNext(questionsList, rawFileBaseName, triggerBtn, onAfterOcr) {
+  if (!questionsList || questionsList.length === 0) {
+    alert('Daftar soal masih kosong. Impor atau buat soal terlebih dahulu.');
+    return;
+  }
+
+  const originalLabel = triggerBtn ? triggerBtn.textContent : '';
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = '⏳ Mengekspor...';
+  }
+
+  try {
+    const pendingCount = getPendingImageBsCount(questionsList);
+    if (pendingCount > 0 && userApiKey) {
+      const wantOcr = confirm(
+        `Ditemukan ${pendingCount} soal Benar/Salah yang pernyataannya masih berbentuk gambar.\n\nKlik OK untuk membaca isi gambar dengan Gemini AI sebelum ekspor ke Afresto Next, atau Cancel untuk ekspor langsung apa adanya.`
+      );
+      if (wantOcr) {
+        const gemini = new GeminiService(userApiKey, selectedModel);
+        for (let i = 0; i < questionsList.length; i++) {
+          const q = questionsList[i];
+          if (q.tipe === 'BENAR_SALAH' && Object.keys(q.opsi || {}).length < 2 && q.gambar_base64) {
+            const extracted = await gemini.extractBenarSalahFromImage(q.gambar_base64, q.pertanyaan || '');
+            q.opsi = extracted.opsi;
+            q.kunci = extracted.kunci;
+            q._ocrExtracted = true;
+            q.gambar_base64 = null;
+            q.validation = validateQuestionCompleteness(q, i);
+          }
+        }
+        if (typeof onAfterOcr === 'function') await onAfterOcr();
+      }
+    }
+
+    const { bytes, stats } = await buildAfrestoNextDocx(questionsList);
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const mapelSlug = String(rawFileBaseName || 'Bank_Soal').trim().replace(/[^a-zA-Z0-9_-]+/g, '_');
+    a.href = url;
+    a.download = `${mapelSlug}_Afresto_Next.docx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    if (stats.incompleteBenarSalah.length > 0) {
+      alert(
+        `Berhasil mengunduh ${stats.total} soal ke format Afresto Next (.docx).\n\nCatatan: Soal nomor ${stats.incompleteBenarSalah.join(', ')} memiliki pernyataan Benar/Salah di gambar yang belum diekstrak ke teks. Buka file hasil ekspor atau gunakan tombol "Baca Gambar (AI)" / "Lengkapi" bila perlu disempurnakan.`
+      );
+    }
+  } catch (err) {
+    alert(`Gagal mengekspor DOCX Afresto Next: ${err.message}`);
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalLabel;
+    }
+  }
+}
+
+if (btnOpenBridgeConverter) {
+  btnOpenBridgeConverter.addEventListener('click', () => {
+    openConverterFullscreenTab(currentQuestions, inputMapel?.value || 'Bank_Soal');
+  });
+}
+
+if (btnExportNextDocx) {
+  btnExportNextDocx.addEventListener('click', async () => {
+    await exportQuestionsToAfrestoNext(
+      currentQuestions,
+      inputMapel?.value || 'Bank_Soal',
+      btnExportNextDocx,
+      async () => {
+        await chrome.storage.local.set({ last_questions: currentQuestions });
+        renderQuestionsList();
+        renderKonverterTabState();
+      }
+    );
+  });
+}
 
 if (btnClearPlaylist) {
   btnClearPlaylist.addEventListener('click', () => {
@@ -2635,8 +2830,10 @@ function displayLearningMaterialPreview(mat) {
 function initMateriModule() {
   const tabModuleSoal = document.getElementById('tab-module-soal');
   const tabModuleMateri = document.getElementById('tab-module-materi');
+  const tabModuleKonverter = document.getElementById('tab-module-konverter');
   const moduleSoalWrapper = document.getElementById('module-soal-wrapper');
   const moduleMateriWrapper = document.getElementById('module-materi-wrapper');
+  const moduleKonverterWrapper = document.getElementById('module-konverter-wrapper');
 
   const inputMateriMapel = document.getElementById('input-materi-mapel');
   const selectMateriKelas = document.getElementById('select-materi-kelas');
@@ -2740,8 +2937,8 @@ function initMateriModule() {
       displayLearningMaterialPreview(currentLearningMaterial);
     }
 
-    if (data.afresto_active_module === 'materi') {
-      switchModuleTab('materi');
+    if (data.afresto_active_module === 'materi' || data.afresto_active_module === 'konverter') {
+      switchModuleTab(data.afresto_active_module);
     }
   });
 
@@ -2772,37 +2969,139 @@ function initMateriModule() {
 
   // Tab Switcher dengan Persistensi
   function switchModuleTab(mode) {
-    currentActiveModule = mode;
-    chrome.storage.local.set({ afresto_active_module: mode });
-    if (mode === 'materi') {
-      if (tabModuleMateri) {
-        tabModuleMateri.classList.add('active');
-        tabModuleMateri.setAttribute('aria-selected', 'true');
+    const tabMap = {
+      soal: { btn: tabModuleSoal, panel: moduleSoalWrapper },
+      materi: { btn: tabModuleMateri, panel: moduleMateriWrapper },
+      konverter: { btn: tabModuleKonverter, panel: moduleKonverterWrapper }
+    };
+    const activeKey = tabMap[mode] ? mode : 'soal';
+    currentActiveModule = activeKey;
+    chrome.storage.local.set({ afresto_active_module: activeKey });
+
+    Object.entries(tabMap).forEach(([key, entry]) => {
+      const isActive = key === activeKey;
+      if (entry.btn) {
+        entry.btn.classList.toggle('active', isActive);
+        entry.btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
       }
-      if (tabModuleSoal) {
-        tabModuleSoal.classList.remove('active');
-        tabModuleSoal.setAttribute('aria-selected', 'false');
+      if (entry.panel) {
+        entry.panel.classList.toggle('hidden', !isActive);
       }
-      if (moduleMateriWrapper) moduleMateriWrapper.classList.remove('hidden');
-      if (moduleSoalWrapper) moduleSoalWrapper.classList.add('hidden');
-    } else {
-      if (tabModuleSoal) {
-        tabModuleSoal.classList.add('active');
-        tabModuleSoal.setAttribute('aria-selected', 'true');
-      }
-      if (tabModuleMateri) {
-        tabModuleMateri.classList.remove('active');
-        tabModuleMateri.setAttribute('aria-selected', 'false');
-      }
-      if (moduleSoalWrapper) moduleSoalWrapper.classList.remove('hidden');
-      if (moduleMateriWrapper) moduleMateriWrapper.classList.add('hidden');
+    });
+
+    if (activeKey === 'konverter') {
+      renderKonverterTabState();
     }
-    // Segera perbarui status banner agar langsung sesuai dengan konteks tab yang aktif
+    renderQuestionNavigator(currentQuestions);
     checkActiveTabStatus();
   }
 
   if (tabModuleSoal) tabModuleSoal.addEventListener('click', () => switchModuleTab('soal'));
   if (tabModuleMateri) tabModuleMateri.addEventListener('click', () => switchModuleTab('materi'));
+  if (tabModuleKonverter) tabModuleKonverter.addEventListener('click', () => switchModuleTab('konverter'));
+
+  // Event Listener Tab Konverter Next
+  const convDropBox = document.getElementById('conv-tab-drop-box');
+  const convFileInput = document.getElementById('conv-tab-file-input');
+  const convFilePanel = document.getElementById('conv-tab-file-panel');
+  const convFileMeta = document.getElementById('conv-tab-file-meta');
+  const convFileStats = document.getElementById('conv-tab-file-stats');
+  const convBsWarning = document.getElementById('conv-tab-bs-warning');
+  const btnConvExportActive = document.getElementById('btn-conv-tab-export-active');
+  const btnConvExportFile = document.getElementById('btn-conv-tab-export-file');
+  const btnConvOpenFull = document.getElementById('btn-conv-tab-open-full');
+
+  async function loadFileIntoKonverterTab(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.docx')) {
+      alert('Pilih file Word berformat .docx.');
+      return;
+    }
+    try {
+      const ab = await file.arrayBuffer();
+      const parsed = await parseDocx(ab);
+      convTabFileQuestions = parsed.directQuestions || [];
+      convTabFileName = file.name.replace(/\.docx$/i, '');
+
+      if (convFileMeta) convFileMeta.textContent = `${file.name} (${convTabFileQuestions.length} soal)`;
+      const c = countQuestionTypes(convTabFileQuestions);
+      if (convFileStats) {
+        const parts = [`PG: ${c.PG}`, `PGK: ${c.PG_KOMPLEKS}`, `B/S: ${c.BENAR_SALAH}`];
+        if (c.MENCOCOKKAN > 0) parts.push(`Cocok: ${c.MENCOCOKKAN}`);
+        convFileStats.textContent = parts.join(' • ');
+      }
+      const pendingBs = getPendingImageBsCount(convTabFileQuestions);
+      if (convBsWarning) {
+        if (pendingBs > 0) {
+          convBsWarning.textContent = `Terdapat ${pendingBs} soal Benar/Salah bergambar. Saat ekspor Anda dapat membaca teksnya via AI, atau edit di tampilan layar penuh.`;
+          convBsWarning.className = 'alert alert-warning';
+          convBsWarning.classList.remove('hidden');
+        } else {
+          convBsWarning.classList.add('hidden');
+        }
+      }
+      if (convFilePanel) convFilePanel.classList.remove('hidden');
+    } catch (err) {
+      alert(`Gagal membaca file .docx: ${err.message}`);
+    }
+  }
+
+  if (convDropBox && convFileInput) {
+    convDropBox.addEventListener('click', () => convFileInput.click());
+    convDropBox.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        convFileInput.click();
+      }
+    });
+    convDropBox.addEventListener('dragover', (e) => { e.preventDefault(); convDropBox.classList.add('dragover'); });
+    convDropBox.addEventListener('dragleave', () => convDropBox.classList.remove('dragover'));
+    convDropBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      convDropBox.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) loadFileIntoKonverterTab(e.dataTransfer.files[0]);
+    });
+    convFileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) loadFileIntoKonverterTab(e.target.files[0]);
+    });
+  }
+
+  if (btnConvExportActive) {
+    btnConvExportActive.addEventListener('click', async () => {
+      await exportQuestionsToAfrestoNext(
+        currentQuestions,
+        inputMapel?.value || 'Bank_Soal',
+        btnConvExportActive,
+        async () => {
+          await chrome.storage.local.set({ last_questions: currentQuestions });
+          renderQuestionsList();
+          renderKonverterTabState();
+        }
+      );
+    });
+  }
+
+  if (btnConvExportFile) {
+    btnConvExportFile.addEventListener('click', async () => {
+      await exportQuestionsToAfrestoNext(
+        convTabFileQuestions,
+        convTabFileName,
+        btnConvExportFile,
+        () => loadFileStatsOnly()
+      );
+    });
+  }
+
+  function loadFileStatsOnly() {
+    if (!convBsWarning) return;
+    const pendingBs = getPendingImageBsCount(convTabFileQuestions);
+    if (pendingBs === 0) convBsWarning.classList.add('hidden');
+  }
+
+  if (btnConvOpenFull) {
+    btnConvOpenFull.addEventListener('click', () => {
+      openConverterFullscreenTab();
+    });
+  }
 
   // Mulai Sekarang
   if (btnMateriMulaiSekarang) {

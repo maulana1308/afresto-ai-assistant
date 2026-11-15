@@ -1,0 +1,54 @@
+# ==============================================================================
+# PILIH SALAH SATU POLA NGINX SESUAI KEBUTUHAN DOMAIN ANDA
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# OPSI 1 (Rekomendasi): Subdomain khusus, misal konverter.domainanda.com
+# Simpan ke /etc/nginx/sites-available/konverter.conf
+# Aktifkan dengan:
+#   sudo ln -s /etc/nginx/sites-available/konverter.conf /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d konverter.domainanda.com
+# ------------------------------------------------------------------------------
+server {
+    listen 80;
+    server_name konverter.domainanda.com;
+
+    client_max_body_size 8M;
+
+    # Proteksi tambahan level Nginx (aktifkan limit_req_zone di /etc/nginx/nginx.conf blok http {} jika perlu)
+    # limit_req_zone $binary_remote_addr zone=afresto_ocr:10m rate=10r/m;
+    location /api/ocr-bs {
+        # limit_req zone=afresto_ocr burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3845;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3845;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# ------------------------------------------------------------------------------
+# OPSI 2: Subpath di dalam server block domain yang sudah ada (domainanda.com/konverter/)
+# Tempel blok location berikut ke dalam server { ... } milik domain Anda
+# (WAJIB akhiri dengan garis miring /konverter/ saat diakses)
+# ------------------------------------------------------------------------------
+# location /konverter/ {
+#     client_max_body_size 8M;
+#     proxy_pass http://127.0.0.1:3845/;
+#     proxy_http_version 1.1;
+#     proxy_set_header Host $host;
+#     proxy_set_header X-Real-IP $remote_addr;
+#     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#     proxy_set_header X-Forwarded-Proto $scheme;
+# }

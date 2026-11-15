@@ -586,9 +586,12 @@ STANDAR 6 TIPE SOAL AFRESTO:
 6. "URAIAN": Soal uraian / essay terbuka, kunci berupa rubrik jawaban singkat.
 
 ATURAN PENGENALAN NASKAH WORD:
-- Kenali setiap butir soal secara akurat terlepas dari ragam format penomoran (misal: '1.', '1)', 'No. 1', atau tabel).
-- Deteksi kunci jawaban heterogen: kenali kunci yang tertulis di samping butir soal (misal '1. (Kunci: B)'), di bawah butir soal ('Kunci: B'), di dalam tabel kunci jawaban di akhir dokumen, atau tanda bintang '*' pada opsi. Jika kunci tidak tertulis, analisislah butir soal dan tentukan kunci yang paling tepat secara kurikuler!
-- Deteksi stimulus gambar: Jika ada penanda [GAMBAR_EMBED: rId...], simpan rId tersebut ke properti "gambar_tag".
+- Kenali setiap butir soal secara akurat terlepas dari ragam format penomoran (misal: '1.', '1)', 'No. 1', blok 'Tipe Soal:', atau tabel).
+- Patuhi penanda 'Tipe Soal:' jika tertulis eksplisit (misal 'PILIHAN GANDA KOMPLEKS' -> "PG_KOMPLEKS", 'BENAR / SALAH' -> "BENAR_SALAH", 'PILIHAN GANDA' -> "PG"), serta buang baris label metadata 'Tipe Soal:' dan 'Pertanyaan:' dari teks 'pertanyaan'.
+- Deteksi kunci jawaban heterogen: kenali kunci yang tertulis di samping butir soal (misal '1. (Kunci: B)'), di bawah/ujung opsi ('KUNCI : A , D'), di dalam tabel kunci jawaban di akhir dokumen, atau tanda bintang '*' pada opsi. Untuk PG_KOMPLEKS, kunci harus berupa array huruf (misal ["C", "D"] atau ["B"]). Jika kunci tidak tertulis, analisislah butir soal dan tentukan kunci yang paling tepat secara kurikuler!
+- Deteksi stimulus gambar: Jika ada penanda [GAMBAR_EMBED: rId...]:
+  1) Bila lampiran gambar berisi tangkapan layar pernyataan Benar/Salah (misal "Pernyataan: ... Hasil Pernyataan : BENAR/SALAH") atau daftar opsi soal, BACA/OCR seluruh teks pernyataan dan kunci Benar/Salah dari gambar tersebut ke dalam properti "opsi" (A, B, dst.) dan "kunci" ({"A":"Benar", "B":"Salah"}), lalu kosongkan "gambar_tag" agar tidak dobel kecuali gambar itu berisi ilustrasi visual soal.
+  2) Bila gambar berisi ilustrasi/grafik/tabel visual pendukung soal, simpan rId tersebut ke properti "gambar_tag".
 - Ekstraksi informasi Mata Pelajaran dan Kelas dari KOP/Header naskah jika tersedia.
 - Klasifikasi Level Kognitif Taksonomi Bloom: Tentukan ranah kognitif yang paling tepat untuk setiap butir soal: "C1 (Mengingat)", "C2 (Memahami)", "C3 (Aplikasi)", "C4 (Analisis)", "C5 (Evaluasi)", atau "C6 (Kreasi)" berdasarkan Kata Kerja Operasional (KKO) dan kompleksitas stimulus.
 
@@ -619,6 +622,21 @@ FORMAT OUTPUT WAJIB BERUPA JSON MURNI:
 
     const userPrompt = `Berikut adalah teks hasil ekstraksi naskah bank soal Word (.docx):\n\n---\n${rawText.slice(0, 50000)}\n---\n\nEkstrak seluruh butir soal menjadi format JSON terstandar di atas!`;
 
+    // Lampirkan maksimal 10 gambar DOCX tersemat (jika ada) agar Gemini Vision dapat membaca soal/pernyataan berbasis tangkapan layar
+    const userParts = [{ text: userPrompt }];
+    if (docxImages && typeof docxImages === "object") {
+      const referencedIds = [...new Set([...rawText.matchAll(/\[GAMBAR_EMBED:\s*([^\]]+)\]/g)].map(m => m[1].trim()))];
+      const imageIdsToAttach = (referencedIds.length > 0 ? referencedIds : Object.keys(docxImages)).slice(0, 10);
+      for (const rId of imageIdsToAttach) {
+        const dataUrl = docxImages[rId];
+        if (typeof dataUrl !== "string") continue;
+        const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!m) continue;
+        userParts.push({ text: `[Lampiran Gambar Referensi rId="${rId}"]` });
+        userParts.push({ inlineData: { mimeType: m[1], data: m[2] } });
+      }
+    }
+
     let attemptErrors = [];
     for (let i = 0; i < candidateModels.length; i++) {
       const currentModel = candidateModels[i];
@@ -628,7 +646,7 @@ FORMAT OUTPUT WAJIB BERUPA JSON MURNI:
 
       try {
         const requestBody = {
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          contents: [{ role: "user", parts: userParts }],
           systemInstruction: { parts: [{ text: systemPrompt }] },
           generationConfig: {
             temperature: 0.2,
@@ -854,5 +872,102 @@ Output WAJIB berupa JSON MURNI tanpa teks pengantar atau markdown wrap (\`\`\`js
     }
 
     throw new Error("Semua model gagal menyusun materi: " + attemptErrors.join(" | "));
+  }
+
+  /**
+   * Mengekstrak daftar pernyataan & kunci Benar/Salah dari gambar screenshot soal (#46-#50).
+   * @param {string} dataUrl - Gambar Data URL base64
+   * @param {string} questionText - Teks pengantar pertanyaan (konteks)
+   * @returns {Promise<{ opsi: Object, kunci: Object, count: number }>}
+   */
+  async extractBenarSalahFromImage(dataUrl, questionText = "") {
+    if (!this.apiKey) {
+      throw new Error("Kunci API Gemini belum diisi.");
+    }
+    const match = typeof dataUrl === "string"
+      ? dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+      : null;
+    if (!match) {
+      throw new Error("Format gambar tidak valid untuk OCR.");
+    }
+
+    const availableOnline = await this.listAvailableModels();
+    let primaryModel = (this.model || "").replace(/^models\//, "").trim();
+    if (!ALLOWED_MODELS.includes(primaryModel)) {
+      primaryModel = "gemini-3.5-flash-lite";
+    }
+    let candidateModels = [primaryModel, ...ALLOWED_MODELS.filter(m => m !== primaryModel)];
+    if (availableOnline.length > 0) {
+      const filtered = candidateModels.filter(m => availableOnline.includes(m));
+      if (filtered.length > 0) candidateModels = filtered;
+    }
+
+    const promptText = `Baca gambar tangkapan layar pernyataan Benar/Salah berikut (konteks soal: "${questionText || '-'}").
+Ekstrak setiap baris pernyataan beserta status jawabannya ("Benar" atau "Salah") dalam JSON murni:
+{
+  "statements": [
+    { "teks": "teks pernyataan lengkap dan rapi", "nilai": "Benar" }
+  ]
+}
+Aturan ketat:
+- Jangan potong atau ubah makna kalimat pernyataan; rapikan salah ketik jeda baris PDF/screenshot bila jelas (misal huruf terpotong di atas kotak seperti "Adik men\\nAdik mengantuk..." ambil kalimat utuhnya "Adik mengantuk setelah minum obat.").
+- Nilai wajib persis "Benar" atau "Salah".`;
+
+    const attemptErrors = [];
+    for (const currentModel of candidateModels) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${this.apiKey}`;
+      const controller = new AbortController();
+      const timeoutTimer = setTimeout(() => controller.abort(), 30000);
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [
+                { text: promptText },
+                { inlineData: { mimeType: match[1], data: match[2] } }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 2048,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+        clearTimeout(timeoutTimer);
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          attemptErrors.push(`[${currentModel}]: ${errData?.error?.message || res.status}`);
+          continue;
+        }
+
+        const data = await res.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const cleanJson = rawText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```$/, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        const list = Array.isArray(parsed.statements) ? parsed.statements : [];
+        if (list.length < 2) {
+          throw new Error("AI hanya mendeteksi kurang dari 2 pernyataan pada gambar.");
+        }
+
+        const opsi = {};
+        const kunci = {};
+        list.slice(0, 8).forEach((item, idx) => {
+          const letter = String.fromCharCode(65 + idx);
+          opsi[letter] = String(item.teks || "").trim();
+          kunci[letter] = /salah|false/i.test(String(item.nilai || "")) ? "Salah" : "Benar";
+        });
+        return { opsi, kunci, count: Object.keys(opsi).length };
+      } catch (err) {
+        clearTimeout(timeoutTimer);
+        attemptErrors.push(`[${currentModel}]: ${err.message}`);
+      }
+    }
+    throw new Error(`Gagal membaca gambar Benar/Salah: ${attemptErrors.join(" | ")}`);
   }
 }

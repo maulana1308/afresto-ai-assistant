@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Konverter Soal: Afresto Legacy ke Afresto Next (.docx)</title>
+  <style>
+    :root {
+      --bg-base: #fcfbf9;
+      --bg-card: #ffffff;
+      --bg-elevated: #f5f3ef;
+      --border-default: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text-primary: #1c1917;
+      --text-secondary: #57534e;
+      --accent-primary: #0369a1;
+      --accent-primary-hover: #075985;
+      --accent-ok: #15803d;
+      --accent-err: #991b1b;
+      --bg-err-soft: #fef2f2;
+      --bg-ok-soft: #f0fdf4;
+      --radius-outer: 12px;
+      --radius-inner: 8px;
+      --radius-control: 6px;
+      --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: clamp(16px, 3vw, 32px) 16px 48px;
+    }
+
+    .page-header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-default);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .page-title {
+      font-size: clamp(20px, 2.8vw, 26px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      max-width: 640px;
+    }
+
+    .standard-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-control);
+      color: var(--text-primary);
+    }
+
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 820px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-outer);
+      padding: 18px;
+    }
+
+    .card-elevated {
+      box-shadow: 0 2px 6px rgba(28, 25, 23, 0.05);
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text-primary);
+    }
+
+    .dropzone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 6px;
+      min-height: 132px;
+      padding: 20px 14px;
+      border: 2px dashed var(--border-strong);
+      border-radius: var(--radius-inner);
+      background: var(--bg-elevated);
+      cursor: pointer;
+      transition: border-color 160ms ease-out, background-color 160ms ease-out;
+    }
+
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--accent-primary);
+      background: #f0f9ff;
+    }
+
+    .dropzone:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--accent-primary);
+      outline-offset: 2px;
+    }
+
+    .file-meta {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-inner);
+      font-size: 13px;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 440px) {
+      .stats-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .stat-box {
+      padding: 8px 6px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-control);
+      text-align: center;
+    }
+
+    .stat-num {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-primary);
+    }
+
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .field-group {
+      margin-top: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+
+    input[type="password"], input[type="text"], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-control);
+    }
+
+    .hint-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 10px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: var(--radius-control);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background-color 150ms ease-out, transform 120ms ease-out;
+    }
+
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-block { width: 100%; }
+
+    .btn-primary {
+      background: var(--accent-primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-primary-hover); }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-strong);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #eae6dd; }
+
+    .btn-ok {
+      background: var(--accent-ok);
+      color: #ffffff;
+    }
+
+    .btn-sm {
+      min-height: 36px;
+      padding: 6px 12px;
+      font-size: 12.5px;
+    }
+
+    .alert-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-control);
+      font-size: 13px;
+      border: 1px solid var(--border-default);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .alert-error {
+      background: var(--bg-err-soft);
+      color: var(--accent-err);
+      border-color: #fecaca;
+    }
+
+    .alert-ok {
+      background: var(--bg-ok-soft);
+      color: var(--accent-ok);
+      border-color: #bbf7d0;
+    }
+
+    .alert-warn {
+      background: #fffbeb;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+
+    .hidden { display: none !important; }
+
+    .preview-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-secondary);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-inner);
+      background: var(--bg-base);
+    }
+
+    .q-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .q-card {
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-inner);
+      padding: 14px;
+      background: var(--bg-card);
+    }
+
+    .q-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .q-badges {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    .badge-warn {
+      background: #fffbeb;
+      color: #92400e;
+      border-color: #fcd34d;
+    }
+
+    .badge-ok {
+      background: var(--bg-ok-soft);
+      color: var(--accent-ok);
+      border-color: #86efac;
+    }
+
+    .q-stem {
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-bottom: 10px;
+    }
+
+    .q-opts {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+    }
+
+    .q-opt {
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .q-opt.is-key {
+      color: #ee0000;
+      font-weight: 700;
+      background: #fef2f2;
+    }
+
+    .bs-preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .bs-preview-table th, .bs-preview-table td {
+      border: 1px solid var(--border-strong);
+      padding: 6px 8px;
+      text-align: left;
+    }
+
+    .bs-preview-table th {
+      background: var(--bg-elevated);
+      text-align: center;
+    }
+
+    .bs-preview-table td.center {
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .img-ref-box {
+      margin-top: 10px;
+      padding: 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-control);
+    }
+
+    .img-ref-box img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 4px;
+      border: 1px solid var(--border-strong);
+      margin-bottom: 10px;
+    }
+
+    .bs-editor-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bs-edit-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 115px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    @media (max-width: 500px) {
+      .bs-edit-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Konverter Soal: Afresto Legacy ke Afresto Next</h1>
+        <p class="page-subtitle">Ubah file Word (.docx) hasil ekspor Afresto Legacy menjadi format Afresto Next (kunci PG otomatis ditandai, tabel Mencocokkan, dan tabel Benar/Salah 4 kolom).</p>
+      </div>
+      <span class="standard-tag">Offline &amp; OpenXML .docx</span>
+    </header>
+
+    <div class="workspace-grid">
+      <aside class="card card-elevated" aria-label="Panel unggah dan ekspor">
+        <h2 class="section-title">1. Pilih File Word Afresto Legacy</h2>
+
+        <label class="dropzone" id="dropzone" for="file-input" tabindex="0">
+          <strong style="font-size: 14px;">Klik untuk memilih file .docx</strong>
+          <span style="font-size: 12.5px; color: var(--text-secondary);">atau tarik dan lepas file di area ini</span>
+        </label>
+        <input type="file" id="file-input" accept=".docx" class="hidden">
+
+        <div id="file-info" class="file-meta hidden">
+          <div id="file-name" style="font-weight: 700; word-break: break-all;"></div>
+          <div class="stats-row">
+            <div class="stat-box"><span class="stat-num" id="stat-total">0</span><span class="stat-lbl">Total</span></div>
+            <div class="stat-box"><span class="stat-num" id="stat-pg">0</span><span class="stat-lbl">PG</span></div>
+            <div class="stat-box"><span class="stat-num" id="stat-pgk">0</span><span class="stat-lbl">PGK</span></div>
+            <div class="stat-box"><span class="stat-num" id="stat-bs">0</span><span class="stat-lbl">B/S</span></div>
+          </div>
+        </div>
+
+        <div id="api-key-section" class="field-group hidden">
+          <label for="api-key-input">Kunci API Gemini (Khusus OCR Gambar B/S)</label>
+          <input type="password" id="api-key-input" placeholder="AIzaSy... (opsional)">
+          <p class="hint-text">Disimpan lokal di browser dan hanya dipakai saat tombol baca gambar AI ditekan.</p>
+        </div>
+
+        <div id="pin-section" class="field-group hidden">
+          <label for="access-pin-input">Kode Akses Guru (PIN Server)</label>
+          <input type="password" id="access-pin-input" placeholder="Masukkan PIN akses untuk fitur OCR AI">
+          <p class="hint-text">Server konverter Anda melindungi kuota AI dengan PIN.</p>
+        </div>
+
+        <div class="field-group" style="display: flex; flex-direction: column; gap: 10px;">
+          <button type="button" id="btn-ocr-all-bs" class="btn btn-secondary btn-block hidden">
+            🔍 Baca Semua Gambar B/S dengan AI
+          </button>
+          <button type="button" id="btn-download-next" class="btn btn-primary btn-block" disabled>
+            📤 Unduh Word Afresto Next (.docx)
+          </button>
+        </div>
+
+        <div id="status-alert" class="alert-box hidden" role="status" aria-live="polite"></div>
+
+        <p class="hint-text" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-default);">
+          Privasi: File Word (.docx) diproses di browser Anda. Hanya gambar soal B/S yang dikirim saat tombol baca gambar AI ditekan dan tidak disimpan di server.
+        </p>
+      </aside>
+
+      <section class="card" aria-label="Pratinjau dan penyesuaian soal">
+        <div class="preview-toolbar">
+          <h2 class="section-title" style="margin-bottom: 0;">2. Pratinjau Hasil &amp; Pernyataan Benar/Salah</h2>
+          <span id="bs-pending-badge" class="badge badge-warn hidden">0 soal B/S perlu teks</span>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+          <p style="font-weight: 600; color: var(--text-primary);">Belum ada file .docx yang dimuat</p>
+          <p style="font-size: 13px; margin-top: 4px;">Unggah file Word dari Afresto Legacy di panel sebelah kiri untuk memeriksa setiap nomor soal sebelum diekspor ke format Afresto Next.</p>
+        </div>
+
+        <div id="questions-container" class="q-list hidden"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="scripts/converter_bundle.js"></script>
+  <script src="scripts/converter_app.js"></script>
+</body>
+</html>
