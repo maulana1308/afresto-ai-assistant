@@ -280,7 +280,7 @@ function createKeyRotator(keys) {
           return await fn(keys[idx], idx);
         } catch (err) {
           const msg = String(err?.message || '');
-          const isAuthFail = /api key|401|403|key_invalid|expired/i.test(msg);
+          const isAuthFail = err?.statusCode === 401 || err?.statusCode === 403 || /api key|401|403|key_invalid|expired/i.test(msg);
           const cooldownMs = isAuthFail ? 15 * 60 * 1000 : 3 * 60 * 1000;
           cooldownUntil[idx] = Date.now() + cooldownMs;
         }
@@ -300,7 +300,7 @@ function createKeyRotator(keys) {
 export function createConverterServer(customConfig = {}) {
   const staticRoot = path.resolve(customConfig.staticRoot || process.env.STATIC_ROOT || DEFAULT_STATIC_ROOT);
   const geminiKeys = parseGeminiKeyPool(customConfig);
-  const geminiModel = customConfig.geminiModel || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const geminiModel = customConfig.geminiModel || process.env.GEMINI_MODEL || 'gemini-3.6-flash';
   const accessPin = customConfig.accessPin !== undefined ? customConfig.accessPin : (process.env.CONVERTER_ACCESS_PIN || '').trim();
   const maxBodyBytes = Number(customConfig.maxBodyBytes || process.env.MAX_BODY_BYTES || 6 * 1024 * 1024);
   const rateLimitMax = Number(customConfig.rateLimitMax || process.env.OCR_RATE_LIMIT_MAX || 15);
@@ -315,7 +315,10 @@ export function createConverterServer(customConfig = {}) {
   const keyRotator = createKeyRotator(geminiKeys);
   const ocrRunner = customConfig.ocrRunner || (async (dataUrl, questionText, activeKey) => {
     const gemini = new GeminiService(activeKey, geminiModel);
-    return gemini.extractBenarSalahFromImage(dataUrl, questionText);
+    return gemini.extractBenarSalahFromImage(dataUrl, questionText, {
+      failFastOnQuota: keyRotator.size > 1,
+      requestTimeoutMs: 15000
+    });
   });
 
   const allowRate = createRateLimiter(rateLimitMax, rateLimitWindowMs);
@@ -383,6 +386,7 @@ export function createConverterServer(customConfig = {}) {
         );
       }
 
+      const reqStartedAt = Date.now();
       try {
         const body = await readJsonBody(req, maxBodyBytes);
         const dataUrl = typeof body.dataUrl === 'string' ? body.dataUrl.trim() : '';
@@ -396,6 +400,7 @@ export function createConverterServer(customConfig = {}) {
         const cacheKey = sha256Hex(`${dataUrl}|${questionText}`);
         const cached = ocrCache.get(cacheKey);
         if (cached) {
+          console.log(`[OCR] cache=hit status=200 ms=${Date.now() - reqStartedAt}`);
           return sendJson(res, 200, cached);
         }
 
@@ -405,11 +410,17 @@ export function createConverterServer(customConfig = {}) {
           });
         }
 
-        const extracted = await keyRotator.execute((activeKey, keyIdx) => ocrRunner(dataUrl, questionText, activeKey, keyIdx));
+        let usedKeySlot = -1;
+        const extracted = await keyRotator.execute((activeKey, keyIdx) => {
+          usedKeySlot = keyIdx + 1;
+          return ocrRunner(dataUrl, questionText, activeKey, keyIdx);
+        });
         ocrCache.set(cacheKey, extracted);
+        console.log(`[OCR] cache=miss key=#${usedKeySlot}/${keyRotator.size} status=200 ms=${Date.now() - reqStartedAt}`);
         return sendJson(res, 200, extracted);
       } catch (err) {
         const status = err.statusCode || 502;
+        console.log(`[OCR] cache=miss status=${status} ms=${Date.now() - reqStartedAt}`);
         return sendJson(res, status, { error: err.statusCode ? err.message : 'Gagal memproses OCR gambar di server.' });
       }
     }

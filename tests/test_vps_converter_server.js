@@ -8,6 +8,7 @@ import {
   loadConfiguredEnvFiles,
   parseGeminiKeyPool
 } from '../deploy/vps-converter/server.mjs';
+import { GeminiService } from '../scripts/gemini.js';
 
 console.log('=== TEST SUITE: VPS CONVERTER SERVER & OCR PROXY SECURITY ===');
 
@@ -212,6 +213,90 @@ try {
   console.log('✔ Test 7: Pembacaan otomatis pool key dari EXTRA_ENV_FILES proyek Bot lulus');
 } finally {
   fs.rmSync(tmpEnvDir, { recursive: true, force: true });
+}
+
+// Test 8: Optimasi kecepatan OCR Gemini (zero-preflight /models, thinkingBudget:0 untuk 2.5, fail-fast 429 & cache per-key)
+const realFetch = globalThis.fetch;
+try {
+  const fetchCalls = [];
+  globalThis.fetch = async (url, init) => {
+    fetchCalls.push({ url, init });
+    if (String(url).includes('/v1beta/models?key=FAST_K1')) {
+      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] }] }), { status: 200 });
+    }
+    if (String(url).includes('/v1beta/models?key=FAST_K2')) {
+      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2.0-flash', supportedGenerationMethods: ['generateContent'] }] }), { status: 200 });
+    }
+    if (String(url).includes('key=QUOTA_KEY')) {
+      return new Response(JSON.stringify({ error: { message: 'Quota exceeded' } }), { status: 429 });
+    }
+    if (String(url).includes('gemini-2.5-flash:generateContent?key=FALLBACK_K')) {
+      return new Response(JSON.stringify({ error: { message: 'This model models/gemini-2.5-flash is no longer available to new users' } }), { status: 404 });
+    }
+    if (String(url).includes('/v1beta/models?key=FALLBACK_K')) {
+      return new Response(JSON.stringify({
+        models: [
+          { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-3.6-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-3.1-flash-lite', supportedGenerationMethods: ['generateContent'] }
+        ]
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      candidates: [{
+        content: {
+          parts: [{ text: JSON.stringify({ statements: [{ teks: 'Pernyataan 1', nilai: 'Benar' }, { teks: 'Pernyataan 2', nilai: 'Salah' }] }) }]
+        }
+      }]
+    }), { status: 200 });
+  };
+
+  // 8a. Direct call tanpa GET /models + thinkingBudget: 0 pada gemini-2.5-flash
+  const fastSvc = new GeminiService('FAST_K1', 'gemini-2.5-flash');
+  const fastOut = await fastSvc.extractBenarSalahFromImage(samplePngA, 'Cek cepat');
+  assert.strictEqual(fastOut.count, 2);
+  assert.strictEqual(fetchCalls.length, 1, 'Happy path harus langsung memanggil generateContent tanpa preflight GET /models');
+  const sentBody = JSON.parse(fetchCalls[0].init.body);
+  assert.deepStrictEqual(sentBody.generationConfig.thinkingConfig, { thinkingBudget: 0 });
+
+  // 8b. gemini-2.0-flash tidak mengirim thinkingConfig
+  const svc20 = new GeminiService('FAST_K2', 'gemini-2.0-flash');
+  await svc20.extractBenarSalahFromImage(samplePngA, 'Tanpa thinking');
+  const sentBody20 = JSON.parse(fetchCalls[1].init.body);
+  assert.strictEqual(sentBody20.generationConfig.thinkingConfig, undefined);
+
+  // 8c. failFastOnQuota melempar 429 pada percobaan pertama tanpa mencoba model cadangan
+  const prevLen = fetchCalls.length;
+  const quotaSvc = new GeminiService('QUOTA_KEY', 'gemini-2.5-flash');
+  await assert.rejects(
+    () => quotaSvc.extractBenarSalahFromImage(samplePngA, 'Limit', { failFastOnQuota: true }),
+    (err) => err.statusCode === 429
+  );
+  assert.strictEqual(fetchCalls.length - prevLen, 1, 'failFastOnQuota harus langsung keluar di 429 untuk rotasi key instan');
+
+  // 8d. Cache listAvailableModels terisolasi per API Key (multi-key tidak saling timpa)
+  const m1First = await fastSvc.listAvailableModels();
+  const m2First = await svc20.listAvailableModels();
+  const beforeCachedReads = fetchCalls.length;
+  const m1Second = await fastSvc.listAvailableModels();
+  const m2Second = await svc20.listAvailableModels();
+  assert.deepStrictEqual(m1First, ['gemini-2.5-flash']);
+  assert.deepStrictEqual(m2First, ['gemini-2.0-flash']);
+  assert.deepStrictEqual(m1Second, ['gemini-2.5-flash']);
+  assert.deepStrictEqual(m2Second, ['gemini-2.0-flash']);
+  assert.strictEqual(fetchCalls.length, beforeCachedReads, 'Pembacaan ulang 2 key berbeda harus hit cache tanpa fetch baru');
+
+  // 8e. Jika primaryModel 2.5-flash kena 404, fallback wajib memilih gemini-3.6-flash SEBELUM 3.8-flash
+  const fallbackBefore = fetchCalls.length;
+  const fbSvc = new GeminiService('FALLBACK_K', 'gemini-2.5-flash');
+  const fbRes = await fbSvc.extractBenarSalahFromImage(samplePngA, 'Fallback test');
+  assert.strictEqual(fbRes.count, 2);
+  const fbUrls = fetchCalls.slice(fallbackBefore).map(c => String(c.url));
+  assert.ok(fbUrls.some(u => u.includes('gemini-3.6-flash:generateContent')), 'Wajib fallback ke gemini-3.6-flash');
+  assert.ok(!fbUrls.some(u => u.includes('gemini-3.8-flash:generateContent')), 'Tidak boleh menyentuh gemini-3.8-flash sebelum 3.6-flash');
+  console.log('✔ Test 8: Optimasi kecepatan OCR Gemini (direct call, thinkingBudget:0, fail-fast 429, fallback prioritas 3.6-flash & cache per-key) lulus');
+} finally {
+  globalThis.fetch = realFetch;
 }
 
 console.log('\n⭐ SEMUA TEST VPS CONVERTER SERVER 100% PASS!');

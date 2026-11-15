@@ -74,7 +74,45 @@
       .catch(() => {});
   }
 
+  function compressImageForOcr(dataUrl, maxWidth = 1280, quality = 0.85) {
+    return new Promise((resolve) => {
+      if (typeof dataUrl !== 'string' || dataUrl.length <= 180000) {
+        return resolve(dataUrl);
+      }
+      try {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const origW = img.naturalWidth || img.width;
+            const origH = img.naturalHeight || img.height;
+            if (!origW || !origH) return resolve(dataUrl);
+            const scale = origW > maxWidth ? maxWidth / origW : 1;
+            const targetW = Math.max(1, Math.round(origW * scale));
+            const targetH = Math.max(1, Math.round(origH * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(dataUrl);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, targetW, targetH);
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+            const compressed = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressed && compressed.length < dataUrl.length ? compressed : dataUrl);
+          } catch (_) {
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      } catch (_) {
+        resolve(dataUrl);
+      }
+    });
+  }
+
   async function extractBenarSalahViaBackend(dataUrl, questionText) {
+    const optimizedUrl = await compressImageForOcr(dataUrl);
     if (serverOcrAvailable) {
       const headers = { 'Content-Type': 'application/json' };
       const pinVal = accessPinInput ? accessPinInput.value.trim() : '';
@@ -89,7 +127,7 @@
       const resp = await fetch('./api/ocr-bs', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ dataUrl, questionText })
+        body: JSON.stringify({ dataUrl: optimizedUrl, questionText })
       });
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -108,8 +146,8 @@
       apiKeyInput.focus();
       throw new Error('NEED_LOCAL_API_KEY');
     }
-    const gemini = new window.AfrestoBridge.GeminiService(apiKey, 'gemini-2.5-flash');
-    return gemini.extractBenarSalahFromImage(dataUrl, questionText);
+    const gemini = new window.AfrestoBridge.GeminiService(apiKey, 'gemini-3.6-flash');
+    return gemini.extractBenarSalahFromImage(optimizedUrl, questionText);
   }
 
   apiKeyInput.addEventListener('change', () => {
@@ -346,19 +384,38 @@
 
     btnOcrAllBs.disabled = true;
     const origText = btnOcrAllBs.textContent;
+    const concurrency = Math.min(serverOcrAvailable ? 3 : 2, pendingIdxs.length);
+    let cursor = 0;
+    let completed = 0;
+    let firstErr = null;
+    btnOcrAllBs.textContent = `⏳ Membaca ${pendingIdxs.length} gambar paralel...`;
+
     try {
-      for (let k = 0; k < pendingIdxs.length; k++) {
-        const idx = pendingIdxs[k];
-        btnOcrAllBs.textContent = `⏳ Membaca soal #${idx + 1} (${k + 1}/${pendingIdxs.length})...`;
-        const extracted = await extractBenarSalahViaBackend(questions[idx].gambar_base64, questions[idx].pertanyaan || '');
-        questions[idx].opsi = extracted.opsi;
-        questions[idx].kunci = extracted.kunci;
-        questions[idx]._ocrExtracted = true;
-        questions[idx].gambar_base64 = null;
-      }
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (!firstErr) {
+          const pos = cursor++;
+          if (pos >= pendingIdxs.length) break;
+          const idx = pendingIdxs[pos];
+          try {
+            const extracted = await extractBenarSalahViaBackend(questions[idx].gambar_base64, questions[idx].pertanyaan || '');
+            questions[idx].opsi = extracted.opsi;
+            questions[idx].kunci = extracted.kunci;
+            questions[idx]._ocrExtracted = true;
+            questions[idx].gambar_base64 = null;
+            completed += 1;
+            btnOcrAllBs.textContent = `⏳ Membaca gambar (${completed}/${pendingIdxs.length} selesai)...`;
+          } catch (err) {
+            if (!firstErr) firstErr = err;
+            break;
+          }
+        }
+      });
+      await Promise.all(workers);
+      if (firstErr) throw firstErr;
       showAlert(`Selesai membaca ${pendingIdxs.length} gambar Benar/Salah. Siap diunduh ke format Afresto Next.`, 'ok');
       renderPreview();
     } catch (err) {
+      if (completed > 0) renderPreview();
       if (err.message === 'NEED_LOCAL_API_KEY') {
         showAlert('Masukkan Kunci API Gemini terlebih dahulu untuk membaca semua gambar Benar/Salah.', 'warn');
       } else {

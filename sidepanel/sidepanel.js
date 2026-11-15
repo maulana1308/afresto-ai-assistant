@@ -2291,17 +2291,32 @@ async function exportQuestionsToAfrestoNext(questionsList, rawFileBaseName, trig
       );
       if (wantOcr) {
         const gemini = new GeminiService(userApiKey, selectedModel);
+        const pendingItems = [];
         for (let i = 0; i < questionsList.length; i++) {
           const q = questionsList[i];
           if (q.tipe === 'BENAR_SALAH' && Object.keys(q.opsi || {}).length < 2 && q.gambar_base64) {
+            pendingItems.push({ q, i });
+          }
+        }
+        let cursor = 0;
+        let done = 0;
+        const workerCount = Math.min(2, pendingItems.length);
+        const workers = Array.from({ length: workerCount }, async () => {
+          while (true) {
+            const pos = cursor++;
+            if (pos >= pendingItems.length) break;
+            const { q, i } = pendingItems[pos];
             const extracted = await gemini.extractBenarSalahFromImage(q.gambar_base64, q.pertanyaan || '');
             q.opsi = extracted.opsi;
             q.kunci = extracted.kunci;
             q._ocrExtracted = true;
             q.gambar_base64 = null;
             q.validation = validateQuestionCompleteness(q, i);
+            done += 1;
+            if (triggerBtn) triggerBtn.textContent = `⏳ OCR (${done}/${pendingItems.length})...`;
           }
-        }
+        });
+        await Promise.all(workers);
         if (typeof onAfterOcr === 'function') await onAfterOcr();
       }
     }

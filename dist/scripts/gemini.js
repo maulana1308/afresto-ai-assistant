@@ -12,9 +12,9 @@ export const ALLOWED_MODELS = [
   "gemini-2.0-flash"
 ];
 
-// Cache daftar model aktif per API key agar tidak memanggil GET /models berulang kali di setiap batch
-let cachedOnlineModelsKey = "";
-let cachedOnlineModelsList = [];
+// Cache daftar model aktif per API key (dengan TTL) agar rotasi multi-key tidak saling menimpa cache
+const cachedOnlineModelsByKey = new Map();
+const ONLINE_MODELS_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export class GeminiService {
   constructor(apiKey, model = "gemini-3.5-flash-lite") {
@@ -28,13 +28,14 @@ export class GeminiService {
   }
 
   /**
-   * Mengambil daftar model yang aktif dan didukung untuk generateContent di akun Google ini (dengan cache)
+   * Mengambil daftar model yang aktif dan didukung untuk generateContent di akun Google ini (dengan cache per-key)
    */
   async listAvailableModels(forceRefresh = false) {
     try {
       if (!this.apiKey) return [];
-      if (!forceRefresh && cachedOnlineModelsKey === this.apiKey && cachedOnlineModelsList.length > 0) {
-        return cachedOnlineModelsList;
+      const hit = cachedOnlineModelsByKey.get(this.apiKey);
+      if (!forceRefresh && hit && hit.expiresAt > Date.now() && hit.models.length > 0) {
+        return hit.models;
       }
 
       const controller = new AbortController();
@@ -58,8 +59,14 @@ export class GeminiService {
         .map(m => m.name.replace(/^models\//, "").trim());
 
       if (supported.length > 0) {
-        cachedOnlineModelsKey = this.apiKey;
-        cachedOnlineModelsList = supported;
+        if (cachedOnlineModelsByKey.size >= 50) {
+          const oldestKey = cachedOnlineModelsByKey.keys().next().value;
+          if (oldestKey !== undefined) cachedOnlineModelsByKey.delete(oldestKey);
+        }
+        cachedOnlineModelsByKey.set(this.apiKey, {
+          models: supported,
+          expiresAt: Date.now() + ONLINE_MODELS_CACHE_TTL_MS
+        });
       }
       return supported;
     } catch (_) {
@@ -878,9 +885,10 @@ Output WAJIB berupa JSON MURNI tanpa teks pengantar atau markdown wrap (\`\`\`js
    * Mengekstrak daftar pernyataan & kunci Benar/Salah dari gambar screenshot soal (#46-#50).
    * @param {string} dataUrl - Gambar Data URL base64
    * @param {string} questionText - Teks pengantar pertanyaan (konteks)
+   * @param {Object} options - Opsi performa ({ failFastOnQuota, requestTimeoutMs })
    * @returns {Promise<{ opsi: Object, kunci: Object, count: number }>}
    */
-  async extractBenarSalahFromImage(dataUrl, questionText = "") {
+  async extractBenarSalahFromImage(dataUrl, questionText = "", options = {}) {
     if (!this.apiKey) {
       throw new Error("Kunci API Gemini belum diisi.");
     }
@@ -891,33 +899,32 @@ Output WAJIB berupa JSON MURNI tanpa teks pengantar atau markdown wrap (\`\`\`js
       throw new Error("Format gambar tidak valid untuk OCR.");
     }
 
-    const availableOnline = await this.listAvailableModels();
     let primaryModel = (this.model || "").replace(/^models\//, "").trim();
     if (!ALLOWED_MODELS.includes(primaryModel)) {
-      primaryModel = "gemini-3.5-flash-lite";
+      primaryModel = "gemini-3.6-flash";
     }
-    let candidateModels = [primaryModel, ...ALLOWED_MODELS.filter(m => m !== primaryModel)];
-    if (availableOnline.length > 0) {
-      const filtered = candidateModels.filter(m => availableOnline.includes(m));
-      if (filtered.length > 0) candidateModels = filtered;
-    }
+    const timeoutMs = Number(options.requestTimeoutMs) > 0 ? Number(options.requestTimeoutMs) : 15000;
+    const failFastOnQuota = Boolean(options.failFastOnQuota);
 
-    const promptText = `Baca gambar tangkapan layar pernyataan Benar/Salah berikut (konteks soal: "${questionText || '-'}").
-Ekstrak setiap baris pernyataan beserta status jawabannya ("Benar" atau "Salah") dalam JSON murni:
-{
-  "statements": [
-    { "teks": "teks pernyataan lengkap dan rapi", "nilai": "Benar" }
-  ]
-}
-Aturan ketat:
-- Jangan potong atau ubah makna kalimat pernyataan; rapikan salah ketik jeda baris PDF/screenshot bila jelas (misal huruf terpotong di atas kotak seperti "Adik men\\nAdik mengantuk..." ambil kalimat utuhnya "Adik mengantuk setelah minum obat.").
-- Nilai wajib persis "Benar" atau "Salah".`;
+    const promptText = `Baca gambar pernyataan Benar/Salah berikut (konteks: "${questionText || '-'}").
+Ekstrak setiap pernyataan beserta statusnya ("Benar" atau "Salah") dalam JSON murni:
+{"statements":[{"teks":"...","nilai":"Benar"}]}
+Aturan: jangan potong kalimat pernyataan; rapikan jeda baris screenshot bila jelas; nilai wajib persis "Benar" atau "Salah".`;
 
-    const attemptErrors = [];
-    for (const currentModel of candidateModels) {
+    const invokeModel = async (currentModel) => {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${this.apiKey}`;
+      const generationConfig = {
+        temperature: 0.1,
+        maxOutputTokens: 1024,
+        responseMimeType: "application/json"
+      };
+      // Matikan thinking budget pada Gemini 2.5 agar OCR tabel selesai ~1-2 detik tanpa jeda penalaran
+      if (/^gemini-2\.5-/i.test(currentModel)) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
       const controller = new AbortController();
-      const timeoutTimer = setTimeout(() => controller.abort(), 30000);
+      const timeoutTimer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch(endpoint, {
           method: "POST",
@@ -931,19 +938,17 @@ Aturan ketat:
                 { inlineData: { mimeType: match[1], data: match[2] } }
               ]
             }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 2048,
-              responseMimeType: "application/json"
-            }
+            generationConfig
           })
         });
         clearTimeout(timeoutTimer);
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          attemptErrors.push(`[${currentModel}]: ${errData?.error?.message || res.status}`);
-          continue;
+          const apiMsg = errData?.error?.message || `HTTP ${res.status}`;
+          const err = new Error(`[${currentModel}]: ${apiMsg}`);
+          err.statusCode = res.status;
+          throw err;
         }
 
         const data = await res.json();
@@ -965,7 +970,53 @@ Aturan ketat:
         return { opsi, kunci, count: Object.keys(opsi).length };
       } catch (err) {
         clearTimeout(timeoutTimer);
-        attemptErrors.push(`[${currentModel}]: ${err.message}`);
+        throw err;
+      }
+    };
+
+    const attemptErrors = [];
+    try {
+      return await invokeModel(primaryModel);
+    } catch (primaryErr) {
+      if (primaryErr.statusCode === 401 || primaryErr.statusCode === 403) {
+        throw primaryErr;
+      }
+      if (failFastOnQuota && primaryErr.statusCode === 429) {
+        throw primaryErr;
+      }
+      attemptErrors.push(primaryErr.message);
+    }
+
+    // Fallback model hanya dipanggil jika primaryModel gagal, diurutkan dari model OCR tercepat (hindari 3.8-flash 105s di awal)
+    const OCR_MODEL_PRIORITY = [
+      "gemini-3.6-flash",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash"
+    ];
+    const availableOnline = await this.listAvailableModels();
+    let fallbackModels = [
+      ...OCR_MODEL_PRIORITY,
+      ...ALLOWED_MODELS.filter(m => !OCR_MODEL_PRIORITY.includes(m))
+    ].filter(m => m !== primaryModel);
+    if (availableOnline.length > 0) {
+      const filtered = fallbackModels.filter(m => availableOnline.includes(m));
+      if (filtered.length > 0) fallbackModels = filtered;
+    }
+
+    for (const currentModel of fallbackModels) {
+      try {
+        return await invokeModel(currentModel);
+      } catch (err) {
+        if (err.statusCode === 401 || err.statusCode === 403) {
+          throw err;
+        }
+        if (failFastOnQuota && err.statusCode === 429) {
+          throw err;
+        }
+        attemptErrors.push(err.message);
       }
     }
     throw new Error(`Gagal membaca gambar Benar/Salah: ${attemptErrors.join(" | ")}`);
