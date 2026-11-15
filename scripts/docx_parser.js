@@ -399,6 +399,105 @@ export function parseNumberingXml(numberingXml) {
   return numMap;
 }
 
+function stripAlternateFallbacks(xml) {
+  if (!xml) return '';
+  return xml.replace(/<mc:Fallback\b[^>]*>[\s\S]*?<\/mc:Fallback>/gi, '');
+}
+
+/**
+ * Mengekstrak blok top-level <w:p> dan <w:tbl> secara seimbang (nested-table safe).
+ */
+function extractTopLevelWordBlocks(xmlSlice) {
+  const blocks = [];
+  if (!xmlSlice) return blocks;
+  const tagRegex = /<(\/?)w:(p|tbl)(?=[\s>/])([^>]*)>/gi;
+  let stack = [];
+  let topStart = -1;
+  let topType = null;
+  let m;
+
+  while ((m = tagRegex.exec(xmlSlice)) !== null) {
+    const isClose = m[1] === '/';
+    const tagType = m[2].toLowerCase();
+    const attrs = m[3] || '';
+    const isSelfClose = !isClose && /\/\s*$/.test(attrs);
+
+    if (isSelfClose) {
+      if (stack.length === 0) {
+        blocks.push({ type: tagType, xml: m[0] });
+      }
+      continue;
+    }
+
+    if (!isClose) {
+      if (stack.length === 0) {
+        topStart = m.index;
+        topType = tagType;
+      }
+      stack.push(tagType);
+    } else if (stack.length > 0) {
+      const top = stack[stack.length - 1];
+      if (top === tagType) {
+        stack.pop();
+        if (stack.length === 0 && topStart >= 0) {
+          blocks.push({ type: topType, xml: xmlSlice.slice(topStart, tagRegex.lastIndex) });
+          topStart = -1;
+          topType = null;
+        }
+      }
+    }
+  }
+  return blocks;
+}
+
+/**
+ * Jika <w:tbl> terluar membungkus tabel <w:tbl> di dalam selnya (layout tabel kiri-kanan Word),
+ * uraikan tabel-tabel dalam secara berurutan agar tidak terjadi duplikasi teks sel.
+ */
+function flattenNestedTablesIfNeeded(tblXml) {
+  const innerStart = tblXml.indexOf('>') + 1;
+  const innerEnd = tblXml.lastIndexOf('</w:tbl>');
+  if (innerStart <= 0 || innerEnd <= innerStart) return [tblXml];
+  const innerXml = tblXml.slice(innerStart, innerEnd);
+  if (!/<w:tbl(?=[\s>])/i.test(innerXml)) {
+    return [tblXml];
+  }
+  const nestedTables = [];
+  const tagRegex = /<(\/?)w:tbl(?=[\s>/])([^>]*)>/gi;
+  let depth = 0;
+  let start = -1;
+  let m;
+  while ((m = tagRegex.exec(innerXml)) !== null) {
+    const isClose = m[1] === '/';
+    const isSelfClose = !isClose && /\/\s*$/.test(m[2] || '');
+    if (isSelfClose) continue;
+    if (!isClose) {
+      if (depth === 0) start = m.index;
+      depth++;
+    } else if (depth > 0) {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        nestedTables.push(innerXml.slice(start, tagRegex.lastIndex));
+        start = -1;
+      }
+    }
+  }
+  return nestedTables.length > 0 ? nestedTables : [tblXml];
+}
+
+function isRealHeadingOrStimulus(rawLine) {
+  const clean = String(rawLine || '').replace(/\*\*/g, '').replace(/(?<!\*)\*(?!\*)/g, '').trim();
+  if (!clean) return false;
+  if (/^(?:Read|Bacalah|Perhatikan|Cermati)\s+[\w\s]+(?:questions?|soal|berikut|ini)\b/i.test(clean)) {
+    return true;
+  }
+  if (/^(?:TEXT|TEKS|PASSAGE|BACAAN|WACANA|STIMULUS|READING|DIALOG|DIALOGUE|SOAL|PETUNJUK|DIRECTIONS|INSTRUCTIONS|BAGIAN|SECTION|PART|CHAPTER|BAB)(?:\s+(?:[IVX\d]+|[A-Z](?=\s*[:\-–.]|\s*$)))?\s*(?:[:\-–.]\s*.*|\s*)$/i.test(clean)) {
+    if (clean.length > 80 && !/^(?:PETUNJUK|DIRECTIONS|INSTRUCTIONS)\b/i.test(clean)) return false;
+    return true;
+  }
+  return false;
+}
+
 /**
  * Mengonversi XML dokumen Word menjadi teks bersih terstruktur (dengan penanda tabel & gambar)
  */
@@ -407,19 +506,32 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
   const tables = [];
   const fullTextLines = [];
 
-  // Pindai blok top-level <w:p> dan <w:tbl> secara berurutan sesuai alur naskah
-  const blockRegex = /<w:(p|tbl)(?:[\s\S]*?)<\/w:\1>/gi;
-  let blockMatch;
+  const cleanedXml = stripAlternateFallbacks(xml);
+  const bodyMatch = cleanedXml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/i);
+  const bodyXml = bodyMatch ? bodyMatch[1] : cleanedXml;
+  const topBlocks = extractTopLevelWordBlocks(bodyXml);
+
+  // Uraikan nested <w:tbl> (bila ada layout wrapper table) secara berurutan
+  const blocks = [];
+  for (const blk of topBlocks) {
+    if (blk.type === 'tbl') {
+      for (const subTbl of flattenNestedTablesIfNeeded(blk.xml)) {
+        blocks.push({ type: 'tbl', xml: subTbl });
+      }
+    } else {
+      blocks.push(blk);
+    }
+  }
+
   let tableIndex = 0;
   let listQCounter = 0;
   let listOptCounter = 0;
+  const decimalCounters = {};
+  let lastDecimalNumId = null;
 
-  // Cek apakah naskah dokumen sudah memuat penomoran soal alami (1., 2., ... 25.)
-  const docHasNaturalNumbers = /<w:t\b[^>]*>\s*(?:No\.?\s*)?\d{1,3}[\.\)]/i.test(xml);
-
-  while ((blockMatch = blockRegex.exec(xml)) !== null) {
-    const blockType = blockMatch[1];
-    const blockXml = blockMatch[0];
+  for (const blk of blocks) {
+    const blockType = blk.type;
+    const blockXml = blk.xml;
 
     // Jika blok adalah Tabel: <w:tbl>
     if (blockType === 'tbl') {
@@ -495,8 +607,9 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
     else if (blockType === 'p') {
       let pText = extractTextRuns(blockXml).trim();
 
-      const isHeadingOrStimulus = /^(?:\*\*|\*)?(?:(?:Read|Bacalah|Perhatikan|Cermati)\s+[\w\s]+(?:questions?|soal|berikut)|TEXT|TEKS|PASSAGE|BACAAN|WACANA|STIMULUS|READING|DIALOG|DIALOGUE|SOAL|PETUNJUK|DIRECTIONS|INSTRUCTIONS|BAGIAN|SECTION|PART|CHAPTER|BAB)\b/i.test(pText);
-      if (isHeadingOrStimulus) {
+      const isHeadingOrStimulus = isRealHeadingOrStimulus(pText);
+      const isExplicitTypeHeader = /^(?:\*\*)?(?:No\.?\s*)?(?:\d{1,3}[\.\:\)]\s*)?Tipe\s*(?:Soal)?\s*[:=]/i.test(pText);
+      if (isHeadingOrStimulus || isExplicitTypeHeader) {
         listOptCounter = 0;
       }
 
@@ -537,11 +650,17 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
             pText = `${letter}. ${pText}`;
           }
         } else if (numFmt === 'decimal') {
-          // INI ADALAH NOMOR BUTIR SOAL (1, 2, 3...)
+          // INI ADALAH NOMOR BUTIR SOAL (dilacak per numId + ilvl agar daftar bernomor bersarang tidak menggeser penomoran soal utama)
           if (!pText.match(/^(?:\*\*)?(?:No\.?\s*)?\d{1,3}[\.\)]/i) && !pText.match(/^(?:\*\*)?[A-Ea-e][\.\)]/i)) {
-            listQCounter++;
+            const dKey = `${numId || 'default'}:${ilvl}`;
+            if (decimalCounters[dKey] === undefined) {
+              decimalCounters[dKey] = (lastDecimalNumId === null && ilvl === 0 && listQCounter > 0) ? listQCounter : 0;
+            }
+            decimalCounters[dKey]++;
+            lastDecimalNumId = dKey;
+            listQCounter = decimalCounters[dKey];
             listOptCounter = 0; // Reset counter opsi setiap kali masuk nomor butir soal baru!
-            pText = `${listQCounter}. ${pText}`;
+            pText = `${decimalCounters[dKey]}. ${pText}`;
           }
         } else if (numFmt === 'bullet') {
           // INI ADALAH BULLET POINT STIMULUS / DAFTAR
@@ -828,7 +947,7 @@ function stripMarkdownMarks(str) {
 
 function parseExplicitQuestionType(plainLine) {
   if (!plainLine || typeof plainLine !== 'string') return null;
-  const m = plainLine.match(/^Tipe\s*(?:Soal)?\s*[:=]\s*(.+)$/i);
+  const m = plainLine.match(/^(?:No\.?\s*)?(?:\d{1,3}[\.\:\)]\s*)?Tipe\s*(?:Soal)?\s*[:=]\s*(.+)$/i);
   if (!m) return null;
   const val = m[1].trim();
   if (/kompleks|\bpgk\b|multi/i.test(val)) return 'PG_KOMPLEKS';
@@ -838,6 +957,121 @@ function parseExplicitQuestionType(plainLine) {
   if (/uraian|es[sa]y/i.test(val)) return 'URAIAN';
   if (/pilihan\s*ganda|\bpg\b/i.test(val)) return 'PG';
   return null;
+}
+
+function stripMatchingKeySuffix(text) {
+  const str = stripMarkdownMarks(String(text || '')).trim();
+  const m = str.match(/\s*(?:\|\s*)?(?:Kunci(?:\s+Jawaban)?|Key)\s*[:=]\s*([A-Ja-j])\b[\.\s]*$/i);
+  if (!m) return { cleanText: str, keyLetter: '' };
+  return {
+    cleanText: str.slice(0, m.index).trim(),
+    keyLetter: m[1].toUpperCase()
+  };
+}
+
+function parseConcatenatedMatchingSegments(rawText) {
+  const leftItems = [];
+  const rightItems = [];
+  const plain = stripMarkdownMarks(String(rawText || '')).replace(/\s+/g, ' ').trim();
+  if (!plain) return { leftItems, rightItems };
+
+  // Tangani pola tergabung seperti: "1Karakteristik...|Kunci : a2Kata-kata...Kunci : b"
+  const leftSegRegex = /(?:^|\s)(\d{1,2})\s*[\.\):]?\s*([^\n]+?)\s*(?:\|\s*)?(?:Kunci(?:\s+Jawaban)?|Key)\s*[:=]\s*([A-Ja-j])\b/gi;
+  let lm;
+  let lastLeftEnd = 0;
+  while ((lm = leftSegRegex.exec(plain)) !== null) {
+    const numVal = parseInt(lm[1], 10);
+    if (numVal >= 1 && numVal <= 20) {
+      let itemText = lm[2].replace(/^[\.\)\s]+/, '').trim();
+      // Bersihkan sisa prefix angka sebelumnya jika regex memulai tepat setelah huruf kunci
+      if (itemText) {
+        leftItems.push({ num: numVal, text: itemText, keyLetter: lm[3].toUpperCase() });
+        lastLeftEnd = lm.index + lm[0].length;
+      }
+    }
+  }
+
+  // Tangani sisa kanan tergabung seperti: "AIstana sentrisBTerdapat kemustahilan" atau "A Istana sentris B Terdapat kemustahilan"
+  const rightSource = leftItems.length > 0 ? plain.slice(lastLeftEnd).trim() : plain;
+  if (rightSource) {
+    const rightSegRegex = /(?:^|(?<=[a-z\.\?\!])|\s)([A-J])(?:\s*[\.\):]\s*|\s*(?=[A-Z][a-z]))([A-Z][^\n]*?)(?=(?:\s+[A-J](?:\s*[\.\):]\s*|\s+(?=[A-Z][a-z])))|(?<=[a-z\.\?\!])[A-J](?:[\.\):]\s*|(?=[A-Z][a-z]))|$)/g;
+    let rm;
+    const candidateRight = [];
+    while ((rm = rightSegRegex.exec(rightSource)) !== null) {
+      const letter = rm[1].toUpperCase();
+      const txt = rm[2].trim();
+      if (txt) candidateRight.push({ letter, text: txt });
+    }
+    if (candidateRight.length >= 2) {
+      rightItems.push(...candidateRight);
+    }
+  }
+  return { leftItems, rightItems };
+}
+
+/**
+ * Mengklasifikasikan tabel Menjodohkan/Mencocokkan:
+ * - Tabel 4 kolom gabungan (SOAL | JAWABAN atau Test 11) -> isCombined4Col: true
+ * - Tabel terpisah Afresto Legacy ("Pernyataan Kiri:" 1..N + Kunci : x, dan "Pernyataan Kanan:" A..Z)
+ */
+function classifyMatchingTable(tblRows) {
+  const result = { isCombined4Col: false, leftItems: [], rightItems: [] };
+  if (!Array.isArray(tblRows) || tblRows.length === 0) return result;
+
+  // Cek apakah merupakan tabel 4-kolom klasik (col0=1.., col2=A..) dan bukan kolom Kunci
+  const nonHeaderRows = tblRows.filter(r => {
+    const joined = r.map(c => String(c || '').trim().toUpperCase()).join('|');
+    return joined !== 'SOAL|JAWABAN' && joined !== 'NO|PERNYATAAN|KUNCI';
+  });
+
+  if (nonHeaderRows.length === 0) return result;
+
+  const colCountMax = Math.max(...nonHeaderRows.map(r => r.length));
+  const looksLikeCombined4Col = colCountMax >= 3 && nonHeaderRows.filter(r => {
+    const c2 = stripMarkdownMarks(r[2] || '').replace(/[\.\)\s]/g, '').trim();
+    return /^[A-J]$/i.test(c2) && (r[3] || '').trim().length > 0;
+  }).length >= 2;
+
+  if (looksLikeCombined4Col) {
+    result.isCombined4Col = true;
+    return result;
+  }
+
+  for (const row of nonHeaderRows) {
+    const cells = row.map(c => stripMarkdownMarks(c || '').trim()).filter(Boolean);
+    if (cells.length === 0) continue;
+
+    // 1. Jika baris berisi kolom angka kiri (`| 1 | Teks. Kunci : b |` atau `| 1 | Teks | Kunci : b |`)
+    const c0 = stripMarkdownMarks(row[0] || '').trim();
+    if (/^\d{1,2}[\.\):]?$/.test(c0) && cells.length >= 2) {
+      const combinedRest = cells.slice(1).join(' ').trim();
+      const { cleanText, keyLetter } = stripMatchingKeySuffix(combinedRest);
+      if (cleanText) {
+        result.leftItems.push({ num: parseInt(c0, 10), text: cleanText, keyLetter });
+      }
+      continue;
+    }
+
+    // 2. Jika baris berisi kolom huruf kanan (`| A | Bersifat objektif |`)
+    if (/^[A-Ja-j][\.\):]?$/.test(c0) && cells.length >= 2) {
+      const letter = c0.replace(/[^A-Ja-j]/g, '').toUpperCase();
+      const rightText = cells.slice(1).join(' ').trim();
+      if (rightText) {
+        result.rightItems.push({ letter, text: rightText });
+      }
+      continue;
+    }
+
+    // 3. Fallback baris gabungan / sel tunggal (misal nested cell yang menggabungkan beberapa kunci)
+    const rowJoined = cells.join(' ');
+    if (/(?:Kunci(?:\s+Jawaban)?|Key)\s*[:=]\s*[A-Ja-j]\b/i.test(rowJoined)) {
+      const parsed = parseConcatenatedMatchingSegments(rowJoined);
+      if (parsed.leftItems.length > 0) result.leftItems.push(...parsed.leftItems);
+      if (parsed.rightItems.length > 0) result.rightItems.push(...parsed.rightItems);
+    }
+  }
+
+  return result;
 }
 
 function normalizeExtractedKey(raw) {
@@ -852,6 +1086,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
   const questions = [];
+  const pendingMatchingRightBlocks = [];
   let currentQ = null;
   let inOptions = false;
   let pendingStimulusLines = [];
@@ -875,12 +1110,15 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   // Deteksi cerdas apakah suatu baris berangka merupakan sub-item/stimulus (bukan butir soal baru)
   function isSubItemLine(idx, line, qMatch, q) {
     if (!q) return false;
+    // Baris eksplisit "44. Tipe Soal: ..." WAJIB selalu memicu butir soal baru
+    if (parseExplicitQuestionType(stripMarkdownMarks(line))) return false;
     // Jika soal saat ini sudah memiliki opsi, maka butir soal tersebut sudah lengkap
     if (Object.keys(q.opsi || {}).length > 0) return false;
 
     const num = parseInt(qMatch[1], 10);
-    // 1. Backwards jump (misal di soal 31 tiba-tiba ada nomor 1, 2, 3...)
+    // 1. Backwards jump atau daftar internal yang dimulai ulang dari 1 di dalam blok Tipe Soal sebelum ada opsi/kunci
     if (num < q.id) return true;
+    if (num === 1 && q.explicitTipe && !q.hasExplicitKey && !q.inPembahasan && Object.keys(q.opsi || {}).length === 0) return true;
 
     // 2. Baris sebelumnya di currentQ berakhir dengan titik dua atau kata pengantar stimulus
     const prevLines = q.pertanyaanLines.slice(-3).join(' ');
@@ -909,6 +1147,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
   // Deteksi apakah suatu baris berangka merupakan butir langkah/resep/prosedur dalam stimulus (bukan soal baru)
   function isStimulusNumberedLine(idx, line, qMatch) {
+    if (parseExplicitQuestionType(stripMarkdownMarks(line))) return false;
     const num = parseInt(qMatch[1], 10);
     const expectedQNum = questions.length + 1;
 
@@ -951,39 +1190,67 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     return false;
   }
 
+  function flushMatchingMarkdownBuffer(qObj) {
+    if (!qObj || !qObj.matchingMdBuffer || qObj.matchingMdBuffer.length === 0) return;
+    const classified = classifyMatchingTable(qObj.matchingMdBuffer);
+    if (!classified.isCombined4Col && (classified.leftItems.length > 0 || classified.rightItems.length > 0)) {
+      if (classified.leftItems.length > 0) {
+        if (!qObj.matchingLeftItems) qObj.matchingLeftItems = [];
+        qObj.matchingLeftItems.push(...classified.leftItems);
+      }
+      if (classified.rightItems.length > 0) {
+        pendingMatchingRightBlocks.push(classified.rightItems);
+      }
+    } else {
+      if (!qObj.tableRows) qObj.tableRows = [];
+      qObj.tableRows.push(...qObj.matchingMdBuffer);
+    }
+    qObj.matchingMdBuffer = [];
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const plainLine = stripMarkdownMarks(line);
 
+    if (currentQ && !line.startsWith('|')) {
+      currentQ.skipMarkdownTableRows = false;
+      flushMatchingMarkdownBuffer(currentQ);
+    }
+
     // Cek apakah mulai masuk blok daftar kunci jawaban di akhir naskah (bukan baris kunci per butir)
     if (!keyRegex.test(plainLine) && /^(?:DAFTAR\s+)?(?:KUNCI(?:\s+JAWABAN)?|ANSWER\s+KEYS?|ANSWERS?|KEYS?|CORRECT\s+ANSWERS?|SOLUTIONS?|مفتاح\s+الإجابة|解答)(?:\s+(?:DAN\s+PEMBAHASAN|SOAL|PAS|PTS|PAT|US|[A-Za-z0-9\s]+))?\s*:?\s*$/i.test(plainLine)) {
       if (currentQ) {
+        flushMatchingMarkdownBuffer(currentQ);
         questions.push(finalizeQuestion(currentQ, docxImages, tables));
         currentQ = null;
       }
       break; // Hentikan loop butir soal, sisanya adalah daftar kunci jawaban
     }
 
-    const isHeadingOrStimulus = /^(?:\*\*|\*)?(?:(?:Read|Bacalah|Perhatikan|Cermati)\s+[\w\s]+(?:questions?|soal|berikut)|TEXT|TEKS|PASSAGE|BACAAN|WACANA|STIMULUS|READING|DIALOG|DIALOGUE|SOAL|PETUNJUK|DIRECTIONS|INSTRUCTIONS|BAGIAN|SECTION|PART|CHAPTER|BAB)\b/i.test(line);
+    const isHeadingOrStimulus = isRealHeadingOrStimulus(line);
     const isIngredientsOrSteps = /^(?:\*\*|\*|[•\-\*]\s*)?(?:Ingredients?|Steps?|Langkah(?:-langkah)?|Bahan(?:-bahan)?|Cara\s+(?:Membuat|Kerja)|Alat\s+dan\s+Bahan|Tahapan?)\s*[:=]/i.test(line);
 
     // Cek apakah ini baris deklarasi eksplisit "Tipe Soal: ..." (seperti ekspor Afresto CBT)
     const explicitTypeDetected = parseExplicitQuestionType(plainLine);
     if (explicitTypeDetected) {
+      const explicitNumMatch = plainLine.match(/^(\d{1,3})\s*[\.\)]\s*/);
+      const parsedExplicitId = explicitNumMatch ? parseInt(explicitNumMatch[1], 10) : null;
       const currentHasBody = currentQ && (
         currentQ.pertanyaanLines.some(l => l.trim().length > 0) ||
         Object.keys(currentQ.opsi).length > 0 ||
         !!currentQ.gambarTag ||
         !!currentQ.kunci ||
         !!currentQ.inPembahasan ||
-        (currentQ.bsItems && currentQ.bsItems.length > 0)
+        (currentQ.bsItems && currentQ.bsItems.length > 0) ||
+        (currentQ.matchingLeftItems && currentQ.matchingLeftItems.length > 0)
       );
       if (!currentQ || currentHasBody) {
         if (currentQ) {
+          flushMatchingMarkdownBuffer(currentQ);
           questions.push(finalizeQuestion(currentQ, docxImages, tables));
         }
         currentQ = {
-          id: questions.length + 1,
+          id: parsedExplicitId || (questions.length + 1),
           originalIndex: questions.length + 1,
           pertanyaanLines: pendingStimulusLines.length > 0 ? [...pendingStimulusLines] : [],
           stimulus: pendingStimulusLines.length > 0 ? pendingStimulusLines.join('\n').trim() : null,
@@ -998,14 +1265,18 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         pendingStimulusLines = [];
         inOptions = false;
       } else {
+        if (parsedExplicitId) currentQ.id = parsedExplicitId;
         currentQ.explicitTipe = explicitTypeDetected;
       }
       continue;
     }
 
     // Jika sedang dalam opsi dan menemui heading / stimulus baru, finalisasi soal sebelumnya
-    if (inOptions && (isHeadingOrStimulus || isIngredientsOrSteps)) {
+    // Lindungi soal dengan Tipe Soal eksplisit yang belum mencapai KUNCI dan opsi < 4 agar narasi opsi tidak memotong soal
+    const canSplitOnStimulus = !currentQ?.explicitTipe || currentQ.hasExplicitKey || Object.keys(currentQ.opsi || {}).length >= 4;
+    if (inOptions && canSplitOnStimulus && (isHeadingOrStimulus || isIngredientsOrSteps)) {
       if (currentQ) {
+        flushMatchingMarkdownBuffer(currentQ);
         questions.push(finalizeQuestion(currentQ, docxImages, tables));
         currentQ = null;
       }
@@ -1014,11 +1285,37 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue;
     }
 
-    // Cek apakah ada tag tabel: [TABEL_X] yang berisi opsi pilihan ganda
+    // Sub-header Pernyataan Kiri / Pernyataan Kanan pada soal Menjodohkan (termasuk blok Kanan yang melompat setelah Pembahasan)
+    const matchingSideMatch = plainLine.match(/^Pernyataan\s+(Kiri|Kanan)\s*[:=]?\s*(.*)$/i);
+    if (matchingSideMatch && currentQ) {
+      flushMatchingMarkdownBuffer(currentQ);
+      currentQ.inPembahasan = false;
+      inOptions = false;
+      currentQ.matchingSectionSide = matchingSideMatch[1].toUpperCase();
+      if (!currentQ.explicitTipe) currentQ.explicitTipe = 'MENCOCOKKAN';
+      continue;
+    }
+
+    // Cek apakah ada tag tabel: [TABEL_X] (opsi PG atau blok Kiri/Kanan Menjodohkan)
     const tblMatch = line.match(/^\[TABEL_(\d+)\]$/i);
     if (tblMatch && currentQ) {
       const tblIdx = parseInt(tblMatch[1], 10) - 1;
       if (tables && tables[tblIdx]) {
+        if (currentQ.explicitTipe === 'MENCOCOKKAN' || currentQ.matchingSectionSide) {
+          const classified = classifyMatchingTable(tables[tblIdx]);
+          if (!classified.isCombined4Col && (classified.leftItems.length > 0 || classified.rightItems.length > 0)) {
+            if (classified.leftItems.length > 0) {
+              if (!currentQ.matchingLeftItems) currentQ.matchingLeftItems = [];
+              currentQ.matchingLeftItems.push(...classified.leftItems);
+            }
+            if (classified.rightItems.length > 0) {
+              pendingMatchingRightBlocks.push(classified.rightItems);
+            }
+            currentQ.skipMarkdownTableRows = true;
+            currentQ.inPembahasan = false;
+            continue;
+          }
+        }
         const extractedOpts = extractOptionsFromTable(tables[tblIdx]);
         if (extractedOpts && Object.keys(currentQ.opsi).length === 0) {
           currentQ.opsi = extractedOpts;
@@ -1133,9 +1430,9 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue; // Belum masuk butir soal (misal KOP naskah)
     }
 
-    // Lewati label murni 'Pertanyaan:' / 'Soal:' agar tidak mengotori badan teks pertanyaan
+    // Lewati label murni 'Pertanyaan:' / 'Soal:' / 'Pernyataan:' agar tidak mengotori badan teks pertanyaan
     if (!inOptions && !currentQ.inPembahasan) {
-      const pLabelMatch = plainLine.match(/^(?:Pertanyaan|Soal)\s*[:=]\s*(.*)$/i);
+      const pLabelMatch = plainLine.match(/^(?:Pertanyaan|Soal|Pernyataan)\s*[:=]\s*(.*)$/i);
       if (pLabelMatch) {
         if (pLabelMatch[1].trim()) {
           currentQ.pertanyaanLines.push(pLabelMatch[1].trim());
@@ -1273,20 +1570,41 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
     // Cek baris tabel markdown
     if (line.startsWith('|')) {
-      if (inOptions && currentQ.tableOptionsTag) {
-        continue; // Lewati baris markdown jika tabel opsi sudah diekstrak rapi
+      if (currentQ.skipMarkdownTableRows || (inOptions && currentQ.tableOptionsTag)) {
+        continue; // Lewati baris markdown jika tabel opsi atau tabel matching sudah diekstrak dari objek tabel
       }
       // HANYA kumpulkan baris tabel ke stimulus pertanyaan jika belum masuk blok opsi
       if (!inOptions) {
-        if (!currentQ.tableRows) currentQ.tableRows = [];
         const cells = line.split('|').map(c => c.trim()).filter(Boolean);
-        if (cells.length >= 2) currentQ.tableRows.push(cells);
+        if (cells.length >= 2) {
+          if (currentQ.explicitTipe === 'MENCOCOKKAN' || currentQ.matchingSectionSide) {
+            if (!currentQ.matchingMdBuffer) currentQ.matchingMdBuffer = [];
+            currentQ.matchingMdBuffer.push(cells);
+          } else {
+            if (!currentQ.tableRows) currentQ.tableRows = [];
+            currentQ.tableRows.push(cells);
+          }
+        }
       }
       continue;
     }
 
-    // Jika belum masuk opsi, ini adalah lanjutan narasi pertanyaan
+    // Jika belum masuk opsi, cek apakah ini baris tergabung Kiri/Kanan Menjodohkan sebelum memasukkan ke narasi pertanyaan
     if (!inOptions) {
+      if ((currentQ.explicitTipe === 'MENCOCOKKAN' || currentQ.matchingSectionSide) &&
+          (/(?:Kunci(?:\s+Jawaban)?|Key)\s*[:=]\s*[A-Ja-j]\b/i.test(plainLine) || /^[A-J][A-Z][a-z]/.test(plainLine) || /^[A-J](?:\s*[\.\):]\s*|\s+)[A-Z][a-z]/.test(plainLine))) {
+        const parsedInline = parseConcatenatedMatchingSegments(plainLine);
+        if (parsedInline.leftItems.length > 0 || parsedInline.rightItems.length >= 2) {
+          if (parsedInline.leftItems.length > 0) {
+            if (!currentQ.matchingLeftItems) currentQ.matchingLeftItems = [];
+            currentQ.matchingLeftItems.push(...parsedInline.leftItems);
+          }
+          if (parsedInline.rightItems.length >= 2) {
+            pendingMatchingRightBlocks.push(parsedInline.rightItems);
+          }
+          continue;
+        }
+      }
       currentQ.pertanyaanLines.push(line);
     } else {
       // Jika sudah masuk opsi tapi ada baris lanjutan, sambungkan ke opsi terakhir
@@ -1304,8 +1622,46 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   }
 
   if (currentQ) {
+    flushMatchingMarkdownBuffer(currentQ);
     questions.push(finalizeQuestion(currentQ, docxImages, tables));
   }
+
+  // Rekonsiliasi antrean Pernyataan Kiri & Pernyataan Kanan (FIFO) untuk soal MENCOCOKKAN yang tabel kanannya terpisah / floating
+  const matchingNeeders = questions.filter(
+    q => Array.isArray(q._matchingLeftItems) && q._matchingLeftItems.length > 0 && (!q.pasangan || q.pasangan.length === 0)
+  );
+  matchingNeeders.forEach((q) => {
+    const rightItems = pendingMatchingRightBlocks.shift() || [];
+    const pairs = [];
+    for (let idx = 0; idx < q._matchingLeftItems.length; idx++) {
+      const left = q._matchingLeftItems[idx];
+      const right = rightItems[idx] || { text: '' };
+      const fallbackLetter = String.fromCharCode(65 + idx);
+      const keyLetter = (left.keyLetter && /^[A-J]$/.test(left.keyLetter)) ? left.keyLetter : fallbackLetter;
+      pairs.push({
+        kiri: normalizeFormulasAndSuperscripts(left.text),
+        kanan: normalizeFormulasAndSuperscripts(right.text),
+        kunci: keyLetter
+      });
+    }
+    for (let idx = q._matchingLeftItems.length; idx < rightItems.length; idx++) {
+      pairs.push({
+        kiri: '',
+        kanan: normalizeFormulasAndSuperscripts(rightItems[idx].text),
+        kunci: String.fromCharCode(65 + idx)
+      });
+    }
+    if (pairs.length > 0) {
+      q.tipe = 'MENCOCOKKAN';
+      q.pasangan = pairs;
+      q.kunci = q._matchingLeftItems
+        .map((left, idx) => `${idx + 1}-${(left.keyLetter && /^[A-J]$/.test(left.keyLetter)) ? left.keyLetter : String.fromCharCode(65 + idx)}`)
+        .join(', ');
+    }
+  });
+  questions.forEach(q => {
+    if ('_matchingLeftItems' in q) delete q._matchingLeftItems;
+  });
 
   // Pemetaan daftar kunci di akhir naskah (jika ada blok KUNCI JAWABAN / ANSWER KEY)
   const keyHeaderMatch = rawText.match(/(?:^|\n)\s*(?:\*+)?(?:DAFTAR\s+)?(?:KUNCI(?:\s+JAWABAN)?|ANSWER\s+KEYS?|ANSWERS?|KEYS?|CORRECT\s+ANSWERS?|SOLUTIONS?|مفتاح\s+الإجابة|解答)(?:[^\n]*?)?\s*:?(?:\*+)?\s*\n([\s\S]*)/i);
@@ -1744,6 +2100,14 @@ function finalizeQuestion(q, docxImages, tables = []) {
     q.opsi = opsiObj;
     kunci = kunciObj;
   }
+  // 2b. Jika tipe soal eksplisit MENCOCOKKAN atau sudah memiliki data matching kiri/pasangan
+  else if (q.explicitTipe === 'MENCOCOKKAN' || (q.matchingLeftItems && q.matchingLeftItems.length > 0) || (q.pasangan && q.pasangan.length > 0)) {
+    tipe = 'MENCOCOKKAN';
+    q.opsi = {};
+    if (Array.isArray(q.pasangan) && q.pasangan.length > 0 && (!kunci || kunci === 'A')) {
+      kunci = q.pasangan.map((p, i) => `${i + 1}-${p.kunci || String.fromCharCode(65 + i)}`).join(', ');
+    }
+  }
   // 3. Deteksi tabel Mencocokkan / Matching vs Benar/Salah Murni (jika tidak memiliki opsi A-E)
   else if (q.tableRows && q.tableRows.length > 1 && Object.keys(q.opsi).length === 0) {
     // Cek apakah tabel ini sebenarnya berisi opsi A, B, C, D, E (seperti pada tabel akuntansi)
@@ -1773,14 +2137,18 @@ function finalizeQuestion(q, docxImages, tables = []) {
         tipe = 'MENCOCOKKAN';
         const pasangan = [];
         dataRows.forEach(r => {
-          const kiri = (r[1] || r[0] || '').trim();
+          const rawKiri = (r[1] || r[0] || '').trim();
           const kanan = (r[3] || r[2] || '').trim();
+          const { cleanText: kiri, keyLetter } = stripMatchingKeySuffix(rawKiri);
           if (kiri && kanan && !kiri.toLowerCase().includes('gambar model')) {
-            pasangan.push({ kiri, kanan });
+            pasangan.push(keyLetter ? { kiri, kanan, kunci: keyLetter } : { kiri, kanan });
           }
         });
         q.pasangan = pasangan;
-        kunci = pasangan.map((p, i) => `${i + 1}-${i + 1}`).join(', ');
+        const hasExplicitPairKey = pasangan.some(p => p.kunci);
+        kunci = hasExplicitPairKey
+          ? pasangan.map((p, i) => `${i + 1}-${p.kunci || String.fromCharCode(65 + i)}`).join(', ')
+          : pasangan.map((p, i) => `${i + 1}-${i + 1}`).join(', ');
         q.opsi = {};
       }
     }
@@ -1886,7 +2254,7 @@ function finalizeQuestion(q, docxImages, tables = []) {
   }
 
   // 5. Deteksi Isian Singkat dengan kunci dalam kurung di akhir: '... disebut ... (Orbital)' atau '... (2555 Mn)'
-  const allowOpenEndedFallback = Object.keys(q.opsi).length === 0 && (!q.pasangan || q.pasangan.length === 0) && tipe !== 'BENAR_SALAH' && tipe !== 'PG_KOMPLEKS' && q.explicitTipe !== 'PG';
+  const allowOpenEndedFallback = Object.keys(q.opsi).length === 0 && (!q.pasangan || q.pasangan.length === 0) && tipe !== 'BENAR_SALAH' && tipe !== 'PG_KOMPLEKS' && tipe !== 'MENCOCOKKAN' && q.explicitTipe !== 'PG' && q.explicitTipe !== 'MENCOCOKKAN';
   const parenMatch = pertanyaan.match(/\(\s*([0-9A-Za-z\/\-\s<>_]{1,50})\s*\)\s*(?:\*+)?\s*$/i);
   if (parenMatch && allowOpenEndedFallback && q.explicitTipe !== 'URAIAN') {
     tipe = 'ISIAN';
@@ -1988,6 +2356,10 @@ function finalizeQuestion(q, docxImages, tables = []) {
 
   if (q.pasangan && q.pasangan.length > 0) {
     res.pasangan = q.pasangan;
+  }
+
+  if (Array.isArray(q.matchingLeftItems) && q.matchingLeftItems.length > 0) {
+    res._matchingLeftItems = q.matchingLeftItems;
   }
 
   if (q.gambarTag && docxImages[q.gambarTag]) {

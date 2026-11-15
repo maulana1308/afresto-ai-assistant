@@ -832,7 +832,9 @@ async function injectSingleQuestion(soal) {
       if (selJodoh) {
         // Jika soal memiliki pemetaan kunci khusus, gunakan; jika default berurutan: pair 1 -> opsi A ('a')
         let targetKey = letter;
-        if (soal.kunci && typeof soal.kunci === 'object' && soal.kunci[num]) {
+        if (pair.kunci && /^[A-Za-z]$/.test(String(pair.kunci).trim())) {
+          targetKey = String(pair.kunci).trim().toLowerCase();
+        } else if (soal.kunci && typeof soal.kunci === 'object' && soal.kunci[num]) {
           targetKey = String(soal.kunci[num]).trim().toLowerCase();
         }
         selJodoh.value = targetKey;
