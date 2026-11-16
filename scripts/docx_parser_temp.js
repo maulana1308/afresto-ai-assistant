@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Native Client-Side DOCX Document Parser
  * Mengekstrak teks, tabel, relasi, dan gambar dari berkas Microsoft Word (.docx)
  * secara 100% lokal di browser (Zero-Server, Zero-Dependency, Native Web Streams).

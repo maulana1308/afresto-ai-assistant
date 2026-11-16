@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Side Panel Controller
  * Mengatur interaksi pengguna, panggilan Gemini API, soft warning, dan auto-loop injeksi.
  */

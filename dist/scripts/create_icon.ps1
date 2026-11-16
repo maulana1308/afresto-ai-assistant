@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Maulana Ibrahim
+# Built by : Maulana Ibrahim
 # Convert PNG to Windows ICO format
 Add-Type -AssemblyName System.Drawing
 

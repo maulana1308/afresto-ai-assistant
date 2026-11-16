@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import assert from 'assert';
 import fs from 'fs';
 import zlib from 'zlib';

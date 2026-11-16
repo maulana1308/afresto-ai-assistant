@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Afresto AI Assistant",
   "version": "3.0.1",
+  "author": "Maulana Ibrahim",
   "description": "Asisten AI Cerdas Pembuat Soal Asesmen dan Materi Pembelajaran Berstandar BSKAP untuk Portal Afresto",
   "icons": {
     "16": "icons/icon16.png",

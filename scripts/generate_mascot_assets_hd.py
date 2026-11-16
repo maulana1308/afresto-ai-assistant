@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Maulana Ibrahim
+# Built by : Maulana Ibrahim
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import numpy as np

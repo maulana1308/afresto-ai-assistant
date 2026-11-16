@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Maulana Ibrahim
+# Built by : Maulana Ibrahim
 $distPath = Join-Path $PSScriptRoot "..\dist"
 $manifest = Get-Content (Join-Path $distPath "manifest.json") | ConvertFrom-Json
 $ver = $manifest.version

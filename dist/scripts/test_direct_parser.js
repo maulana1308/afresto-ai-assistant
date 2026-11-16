@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

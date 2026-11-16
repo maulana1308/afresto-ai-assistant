@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import cp from 'node:child_process';

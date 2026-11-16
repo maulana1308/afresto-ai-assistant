@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * ANS QC AUDIT SUITE: VERIFIKASI EKONOMI & AKUNTANSI (.DOCX)
  * File under test: media_1793109713668_0c506b04.docx
  */

@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Generator Ikon PNG Murni (Pure Node.js - Zero Dependency)
  * Membuat ikon bergradien biru elektrik dengan simbol kilat di tengahnya.
  */

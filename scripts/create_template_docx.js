@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Generator Berkas Template Resmi: TEMPLATE_SOAL_AFRESTO.docx
  * Memproduksi dokumen Microsoft Word (.docx) berstandar OpenXML valid 100%
  * yang mencakup:

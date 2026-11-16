@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Studio Simulasi & Sandbox QC Guru CSS
  * Tema: Humanist Warm Paper (Standard) & Dark Slate (Dual-Mode)
  * Mengakomodasi tampilan layar penuh lega, interaksi pengerjaan siswa, dan cetak naskah PDF resmi sekolah.
@@ -1493,4 +1497,17 @@ sub,
     padding-bottom: 12px;
     margin-bottom: 16px;
   }
+}
+
+.studio-credit-footer {
+  padding: 14px 20px 22px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.studio-credit-footer strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }

@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Controller UI Konverter Mandiri (converter.html)
  * Bekerja baik saat dibuka langsung lewat file:// maupun dari dalam Ekstensi Chrome (MV3 CSP safe).
  */

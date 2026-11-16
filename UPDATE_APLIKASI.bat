@@ -1,4 +1,6 @@
 @echo off
+:: Copyright (c) 2026 Maulana Ibrahim
+:: Built by : Maulana Ibrahim
 setlocal
 title Afresto AI Assistant - Updater Otomatis
 

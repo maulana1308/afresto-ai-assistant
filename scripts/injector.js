@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Smart Content Script & DOM Injector
  * Mengontrol injeksi form soal Afresto dan menerapkan 3-Tier Dynamic Readiness Handshake.
  */

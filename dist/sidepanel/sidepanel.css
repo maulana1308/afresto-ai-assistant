@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 /* ========================================================================
    Afresto AI Assistant - Humanist Warm Paper & Dual-Theme Architecture
    Crafted under APEX NEXUS SOVEREIGN (ANS) Design Engineering Polish Manifesto
@@ -2516,4 +2520,18 @@ sub,
   color: var(--accent-sky);
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sidepanel-credit-footer {
+  margin-top: 16px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border-default);
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.sidepanel-credit-footer strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }

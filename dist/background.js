@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Background Service Worker
  * Mengatur pembukaan Chrome Side Panel dan tata kelola tab aktif.
  */

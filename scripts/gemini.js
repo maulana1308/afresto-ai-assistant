@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Gemini API Engine
  * Mengelola komunikasi langsung dari browser ke Google Gemini API (BYOK).
  */

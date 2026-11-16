@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Test Suite: QC Audit Milestone 3.3 - Studio Simulasi & Sandbox QC Guru
  * Menguji Test-Drive Engine, 1-Click Key Safeguards, Evaluasi 6 Tipe Soal,
  * KOP Sekolah & Print PDF Optimization, dan Integrasi Sidepanel.

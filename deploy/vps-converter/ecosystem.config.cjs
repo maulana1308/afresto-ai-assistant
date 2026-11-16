@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 module.exports = {
   apps: [
     {

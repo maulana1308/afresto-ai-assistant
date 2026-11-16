@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Maulana Ibrahim
+# Built by : Maulana Ibrahim
 $distPath = Join-Path $PSScriptRoot "..\dist"
 $zipPath = Join-Path $PSScriptRoot "..\Afresto_AI_Assistant_v1.0.0.zip"
 

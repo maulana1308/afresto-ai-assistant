@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Test Suite: Backlog 5 Fixes & Enhancements Verification
  * Memverifikasi:
  * 1. Ergonomi tombol hapus & toolbar playlist responsif.

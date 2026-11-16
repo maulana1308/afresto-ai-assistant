@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {

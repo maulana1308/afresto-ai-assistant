@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * CLI Jembatan Konversi: Afresto Legacy (.docx) -> Afresto Next (.docx)
  * Penggunaan:
  *   node scripts/convert_legacy_to_next.js <input_legacy.docx> [output_next.docx] [--api-key=AIza...]

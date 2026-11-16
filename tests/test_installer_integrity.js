@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Test Suite: Extension Package & Distribution Integrity Audit
  * Memverifikasi integritas paket ekstensi Chrome Manifest V3, struktur bersih tanpa installer,
  * panduan guru (BACA_CARA_PAKAI.txt), dan kesiapan rilis ZIP.

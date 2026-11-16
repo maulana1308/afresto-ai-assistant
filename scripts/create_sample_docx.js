@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Generator Berkas Uji Coba: sample_bank_soal_guru.docx
  * Membuat dokumen Word .docx sintetis yang valid dengan:
  * 1. KOP Soal & Info Akademik

@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Test Suite: QC Audit Milestone 3.4 - Mesin Ingesti Bank Soal Word (.docx) Guru
  * Menguji Native ZIP Central Directory Parser, DecompressionStream Web Streams,
  * Ekstraksi Paragraf, Tabel, dan Gambar Media, AI Document Structurer, serta Integritas UI.

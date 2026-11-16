@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import assert from 'node:assert';
 import { GeminiService } from '../scripts/gemini.js';
 

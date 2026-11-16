@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Multimodal Image Service
  * Mengelola pembuatan, kompresi, dan konversi gambar AI & SVG ke format Base64.
  * Integrasi engine gambar otomatis tanpa hambatan.

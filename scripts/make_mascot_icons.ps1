@@ -1,3 +1,5 @@
+# Copyright (c) 2026 Maulana Ibrahim
+# Built by : Maulana Ibrahim
 Add-Type -AssemblyName System.Drawing
 
 $srcPath = "C:\Users\maula\.gemini\antigravity\brain\65a63ff4-d55a-4f07-bad2-3379b5a10f8a\.user_uploaded\media_1793162115740_4da58de3.png"

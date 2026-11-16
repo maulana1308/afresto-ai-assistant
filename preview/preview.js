@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Studio Simulasi & Sandbox QC Guru Controller
  * Mengatur interaksi pengerjaan siswa (test-drive), verifikasi kunci AI, 1-click safeguards,
  * regenerasi butir tunggal (single-item regenerate), ekspor PDF, dan injeksi ke Afresto.

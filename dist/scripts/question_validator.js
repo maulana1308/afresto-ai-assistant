@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant - Pre-Flight Question Validator Engine
  * Memvalidasi kelengkapan butir soal (pertanyaan, opsi A-D/E, kunci jawaban)
  * sebelum diinjeksi ke formulir web Afresto untuk mencegah runtime error.

@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Server Mandiri Konverter Afresto Legacy -> Afresto Next untuk VPS Pribadi.
  * Nol dependensi npm eksternal (murni Node.js built-in >= 18).
  * Jalankan bersama bot WA / Discord Anda menggunakan PM2 + Nginx Reverse Proxy.

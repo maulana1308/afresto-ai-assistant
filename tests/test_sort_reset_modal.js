@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Test Suite: Sort, Reset, & In-Page QC Studio Modal
  * Memverifikasi logika tombol "Urut", "Reset", dan In-Page Modal QC Studio.
  */

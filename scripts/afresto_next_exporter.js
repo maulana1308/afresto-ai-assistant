@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Afresto AI Assistant — Afresto Next OpenXML (.docx) Exporter
  * Menghasilkan berkas Microsoft Word (.docx) sesuai struktur Afresto Next:
  * - PG & PG_KOMPLEKS: auto-numbering angka (1., 2.), opsi huruf kapital (A.–E.),

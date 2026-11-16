@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * ANS QC AUDIT SUITE: VERIFIKASI NASKAH BACAAN & PROSEDUR (READING PROCEDURE TEXT)
  * Mencegah inflasi butir soal akibat langkah resep bernomor (1..N) di dalam stimulus.
  */

@@ -1,4 +1,8 @@
 /**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
+/**
  * Generator Buku Panduan & Tutorial Resmi Guru: PANDUAN_TUTORIAL_AFRESTO_AI.pdf
  * Memproduksi dokumen PDF cetak A4 beresolusi tinggi, desain tipografi elegan,
  * dan panduan visual langkah demi langkah yang ramah untuk Bapak/Ibu Guru.

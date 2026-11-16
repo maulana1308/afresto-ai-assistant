@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2026 Maulana Ibrahim
+ * Built by : Maulana Ibrahim
+ */
 import assert from 'node:assert';
 import { detectCognitiveLevel, extractAndStripCognitiveTag, parseQuestionsDirectly } from '../scripts/docx_parser.js';
 
