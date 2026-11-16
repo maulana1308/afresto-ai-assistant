@@ -173,14 +173,48 @@
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function getQuestionImages(q) {
+    if (!q) return [];
+    if (Array.isArray(q.gambar_list) && q.gambar_list.length > 0) {
+      return q.gambar_list.filter(Boolean);
+    }
+    return q.gambar_base64 ? [q.gambar_base64] : [];
+  }
+
   function getPendingImageBsIndices() {
     const idxs = [];
     questions.forEach((q, i) => {
-      if (q.tipe === 'BENAR_SALAH' && Object.keys(q.opsi || {}).length < 2 && q.gambar_base64) {
+      if (q.tipe === 'BENAR_SALAH' && Object.keys(q.opsi || {}).length < 2 && getQuestionImages(q).length > 0) {
         idxs.push(i);
       }
     });
     return idxs;
+  }
+
+  async function extractAllImagesForQuestion(q) {
+    const imgs = getQuestionImages(q);
+    if (imgs.length === 0) {
+      throw new Error('Tidak ada gambar pernyataan yang dapat dibaca.');
+    }
+    const mergedOpsi = {};
+    const mergedKunci = {};
+    const existingKeys = q.kunci && typeof q.kunci === 'object' && !Array.isArray(q.kunci) ? q.kunci : {};
+    let stmtIdx = 0;
+    for (const imgUrl of imgs) {
+      const extracted = await extractBenarSalahViaBackend(imgUrl, q.pertanyaan || '');
+      const entries = Object.entries(extracted?.opsi || {}).sort(([a], [b]) => a.localeCompare(b));
+      for (const [origKey, text] of entries) {
+        if (stmtIdx >= 10) break;
+        const char = String.fromCharCode(65 + stmtIdx);
+        mergedOpsi[char] = text;
+        mergedKunci[char] = (extracted.kunci && extracted.kunci[origKey]) || existingKeys[char] || 'Benar';
+        stmtIdx += 1;
+      }
+    }
+    if (Object.keys(mergedOpsi).length === 0) {
+      throw new Error('AI tidak menemukan baris pernyataan pada gambar tersebut.');
+    }
+    return { opsi: mergedOpsi, kunci: mergedKunci };
   }
 
   function refreshStatsAndToolbar() {
@@ -243,33 +277,35 @@
             }).join('') +
             `</tbody></table>`;
         } else {
-          const draftA = (q.opsi && q.opsi.A) || '';
-          const draftB = (q.opsi && q.opsi.B) || '';
-          const ansA = (q.kunci && q.kunci.A) || 'Benar';
-          const ansB = (q.kunci && q.kunci.B) || 'Salah';
+          const imgs = getQuestionImages(q);
+          const draftKeysCount = Object.keys(q.kunci || {}).length;
+          const draftOpsiCount = Object.keys(q._draftBsOpsi || {}).length;
+          const rowCount = Math.min(10, Math.max(2, q._manualBsCount || 0, draftKeysCount, draftOpsiCount));
+          const rowsHtml = Array.from({ length: rowCount }, (_, rIdx) => {
+            const letter = String.fromCharCode(65 + rIdx);
+            const draftVal = (q._draftBsOpsi && q._draftBsOpsi[letter]) ?? (q.opsi && q.opsi[letter]) ?? '';
+            const ansVal = (q._draftBsKunci && q._draftBsKunci[letter]) ?? (q.kunci && q.kunci[letter]) ?? (rIdx % 2 === 0 ? 'Benar' : 'Salah');
+            return `
+              <div class="bs-edit-row${rowCount > 2 ? ' has-remove' : ''}">
+                <input type="text" class="bs-input-text" data-idx="${idx}" data-letter="${letter}" value="${escapeHtml(draftVal)}" placeholder="Ketik Pernyataan ${rIdx + 1}">
+                <select class="bs-input-ans" data-idx="${idx}" data-letter="${letter}">
+                  <option value="Benar" ${ansVal === 'Benar' ? 'selected' : ''}>Benar (v)</option>
+                  <option value="Salah" ${ansVal === 'Salah' ? 'selected' : ''}>Salah (v)</option>
+                </select>
+                ${rowCount > 2 ? `<button type="button" class="btn btn-secondary btn-sm btn-remove-bs-row" data-idx="${idx}" data-letter="${letter}" title="Hapus baris">&times;</button>` : ''}
+              </div>`;
+          }).join('');
           bodyHtml = `
             <div class="img-ref-box">
-              ${q.gambar_base64 ? `<img src="${q.gambar_base64}" alt="Gambar pernyataan soal #${idx + 1}">` : ''}
+              ${imgs.map((imgUrl, imIdx) => `<img src="${imgUrl}" alt="Gambar pernyataan soal #${idx + 1} (${imIdx + 1}/${imgs.length})">`).join('')}
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
                 <strong style="font-size:12.5px;">Isi pernyataan Benar/Salah (disimpan ke tabel Afresto Next):</strong>
-                ${q.gambar_base64 ? `<button type="button" class="btn btn-secondary btn-sm btn-ocr-single" data-idx="${idx}">🔍 Baca Gambar Ini (AI)</button>` : ''}
+                ${imgs.length > 0 ? `<button type="button" class="btn btn-secondary btn-sm btn-ocr-single" data-idx="${idx}">🔍 Baca ${imgs.length > 1 ? imgs.length + ' Gambar Ini' : 'Gambar Ini'} (AI)</button>` : ''}
               </div>
               <div class="bs-editor-rows">
-                <div class="bs-edit-row">
-                  <input type="text" class="bs-input-text" data-idx="${idx}" data-letter="A" value="${escapeHtml(draftA)}" placeholder="Ketik Pernyataan 1 (dari gambar di atas)">
-                  <select class="bs-input-ans" data-idx="${idx}" data-letter="A">
-                    <option value="Benar" ${ansA === 'Benar' ? 'selected' : ''}>Benar (v)</option>
-                    <option value="Salah" ${ansA === 'Salah' ? 'selected' : ''}>Salah (v)</option>
-                  </select>
-                </div>
-                <div class="bs-edit-row">
-                  <input type="text" class="bs-input-text" data-idx="${idx}" data-letter="B" value="${escapeHtml(draftB)}" placeholder="Ketik Pernyataan 2 (dari gambar di atas)">
-                  <select class="bs-input-ans" data-idx="${idx}" data-letter="B">
-                    <option value="Benar" ${ansB === 'Benar' ? 'selected' : ''}>Benar (v)</option>
-                    <option value="Salah" ${ansB === 'Salah' ? 'selected' : ''}>Salah (v)</option>
-                  </select>
-                </div>
-                <div style="display:flex; justify-content:flex-end;">
+                ${rowsHtml}
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:4px;">
+                  ${rowCount < 10 ? `<button type="button" class="btn btn-secondary btn-sm btn-add-bs-row" data-idx="${idx}">+ Tambah Pernyataan</button>` : '<span></span>'}
                   <button type="button" class="btn btn-ok btn-sm btn-apply-bs" data-idx="${idx}">Terapkan ke Tabel Afresto Next</button>
                 </div>
               </div>
@@ -293,22 +329,79 @@
       `;
     }).join('');
 
+    function syncManualBsDraft(i) {
+      const qObj = questions[i];
+      if (!qObj) return [];
+      const inputs = Array.from(questionsContainer.querySelectorAll(`.bs-input-text[data-idx="${i}"]`));
+      const draftOpsi = {};
+      const draftKunci = {};
+      inputs.forEach(inp => {
+        const l = inp.getAttribute('data-letter');
+        const sel = questionsContainer.querySelector(`.bs-input-ans[data-idx="${i}"][data-letter="${l}"]`);
+        draftOpsi[l] = inp.value.trim();
+        draftKunci[l] = sel ? sel.value : 'Benar';
+      });
+      qObj._draftBsOpsi = draftOpsi;
+      qObj._draftBsKunci = draftKunci;
+      qObj._manualBsCount = inputs.length;
+      return inputs.map(inp => inp.getAttribute('data-letter'));
+    }
+
+    questionsContainer.querySelectorAll('.btn-add-bs-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const i = Number(e.currentTarget.getAttribute('data-idx'));
+        const letters = syncManualBsDraft(i);
+        if (letters.length < 10) {
+          questions[i]._manualBsCount = letters.length + 1;
+          renderPreview();
+        }
+      });
+    });
+
+    questionsContainer.querySelectorAll('.btn-remove-bs-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const i = Number(e.currentTarget.getAttribute('data-idx'));
+        const removeL = e.currentTarget.getAttribute('data-letter');
+        const letters = syncManualBsDraft(i).filter(l => l !== removeL);
+        const nextOpsi = {};
+        const nextKunci = {};
+        letters.forEach((oldL, newIdx) => {
+          const newL = String.fromCharCode(65 + newIdx);
+          nextOpsi[newL] = questions[i]._draftBsOpsi[oldL] || '';
+          nextKunci[newL] = questions[i]._draftBsKunci[oldL] || 'Benar';
+        });
+        questions[i]._draftBsOpsi = nextOpsi;
+        questions[i]._draftBsKunci = nextKunci;
+        questions[i]._manualBsCount = Math.max(2, letters.length);
+        renderPreview();
+      });
+    });
+
     questionsContainer.querySelectorAll('.btn-apply-bs').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const i = Number(e.currentTarget.getAttribute('data-idx'));
-        const tA = questionsContainer.querySelector(`.bs-input-text[data-idx="${i}"][data-letter="A"]`).value.trim();
-        const tB = questionsContainer.querySelector(`.bs-input-text[data-idx="${i}"][data-letter="B"]`).value.trim();
-        const aA = questionsContainer.querySelector(`.bs-input-ans[data-idx="${i}"][data-letter="A"]`).value;
-        const aB = questionsContainer.querySelector(`.bs-input-ans[data-idx="${i}"][data-letter="B"]`).value;
-        if (!tA || !tB) {
-          showAlert(`Isi kedua teks pernyataan untuk soal #${i + 1} terlebih dahulu.`, 'warn');
+        const letters = syncManualBsDraft(i);
+        const nonEmptyLetters = letters.filter(l => (questions[i]._draftBsOpsi[l] || '').trim().length > 0);
+        if (nonEmptyLetters.length < 2) {
+          showAlert(`Isi minimal 2 teks pernyataan untuk soal #${i + 1} terlebih dahulu.`, 'warn');
           return;
         }
-        questions[i].opsi = { A: tA, B: tB };
-        questions[i].kunci = { A: aA, B: aB };
+        const finalOpsi = {};
+        const finalKunci = {};
+        nonEmptyLetters.forEach((oldL, idxPos) => {
+          const newL = String.fromCharCode(65 + idxPos);
+          finalOpsi[newL] = questions[i]._draftBsOpsi[oldL];
+          finalKunci[newL] = questions[i]._draftBsKunci[oldL] || 'Benar';
+        });
+        questions[i].opsi = finalOpsi;
+        questions[i].kunci = finalKunci;
         questions[i]._ocrExtracted = true;
         questions[i].gambar_base64 = null;
-        showAlert(`Pernyataan soal #${i + 1} berhasil diubah ke tabel Benar/Salah teks.`, 'ok');
+        questions[i].gambar_list = null;
+        delete questions[i]._draftBsOpsi;
+        delete questions[i]._draftBsKunci;
+        delete questions[i]._manualBsCount;
+        showAlert(`${nonEmptyLetters.length} pernyataan soal #${i + 1} berhasil diubah ke tabel Benar/Salah teks.`, 'ok');
         renderPreview();
       });
     });
@@ -320,11 +413,12 @@
         target.disabled = true;
         target.textContent = '⏳ Membaca...';
         try {
-          const extracted = await extractBenarSalahViaBackend(questions[i].gambar_base64, questions[i].pertanyaan || '');
+          const extracted = await extractAllImagesForQuestion(questions[i]);
           questions[i].opsi = extracted.opsi;
           questions[i].kunci = extracted.kunci;
           questions[i]._ocrExtracted = true;
           questions[i].gambar_base64 = null;
+          questions[i].gambar_list = null;
           showAlert(`Berhasil membaca pernyataan Benar/Salah soal #${i + 1} dari gambar.`, 'ok');
           renderPreview();
         } catch (err) {
@@ -337,7 +431,8 @@
             showAlert(`Gagal membaca gambar soal #${i + 1}: ${err.message}`, 'error');
           }
           target.disabled = false;
-          target.textContent = '🔍 Baca Gambar Ini (AI)';
+          const imgCnt = getQuestionImages(questions[i]).length;
+          target.textContent = `🔍 Baca ${imgCnt > 1 ? imgCnt + ' Gambar Ini' : 'Gambar Ini'} (AI)`;
         }
       });
     });
@@ -401,11 +496,12 @@
           if (pos >= pendingIdxs.length) break;
           const idx = pendingIdxs[pos];
           try {
-            const extracted = await extractBenarSalahViaBackend(questions[idx].gambar_base64, questions[idx].pertanyaan || '');
+            const extracted = await extractAllImagesForQuestion(questions[idx]);
             questions[idx].opsi = extracted.opsi;
             questions[idx].kunci = extracted.kunci;
             questions[idx]._ocrExtracted = true;
             questions[idx].gambar_base64 = null;
+            questions[idx].gambar_list = null;
             completed += 1;
             btnOcrAllBs.textContent = `⏳ Membaca gambar (${completed}/${pendingIdxs.length} selesai)...`;
           } catch (err) {

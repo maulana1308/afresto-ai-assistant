@@ -433,8 +433,13 @@
       align-items: center;
     }
 
+    .bs-edit-row.has-remove {
+      grid-template-columns: minmax(0, 1fr) 115px 34px;
+    }
+
     @media (max-width: 500px) {
-      .bs-edit-row {
+      .bs-edit-row,
+      .bs-edit-row.has-remove {
         grid-template-columns: 1fr;
       }
     }

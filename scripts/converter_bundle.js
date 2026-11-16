@@ -1092,6 +1092,34 @@ function normalizeExtractedKey(raw) {
   return cleaned;
 }
 
+function parseAfrestoBsStatement(raw) {
+  const plain = stripMarkdownMarks(String(raw || '')).replace(/^\|+|\|+$/g, '').replace(/\s+/g, ' ').trim();
+  if (!plain) return null;
+  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?(.+?)\s+Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)\s*$/i);
+  if (!m) return null;
+  const teks = m[1].replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!teks) return null;
+  return {
+    teks,
+    nilai: /^(?:benar|true)$/i.test(m[2]) ? 'Benar' : 'Salah'
+  };
+}
+
+function parseBsPembahasanKeys(text) {
+  const plain = stripMarkdownMarks(String(text || ''));
+  const keys = {};
+  const rx = /P(?:er|e)?nyataan\s*(\d{1,2})\s*[:=]\s*(Benar|Salah|True|False)\b/gi;
+  let m;
+  while ((m = rx.exec(plain)) !== null) {
+    const idx = parseInt(m[1], 10);
+    if (idx >= 1 && idx <= 10) {
+      const letter = String.fromCharCode(64 + idx);
+      keys[letter] = /^(?:benar|true)$/i.test(m[2]) ? 'Benar' : 'Salah';
+    }
+  }
+  return keys;
+}
+
 function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   if (!rawText && (!tables || tables.length === 0)) return [];
 
@@ -1111,8 +1139,8 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
   const keyRegex = /^(?:Kunci(?:\s+Jawaban)?|Jawaban|Kunci\s+Soal|Answer(?:\s+Key)?|Correct\s+(?:Answer|Option)|Ans|Key|Solution|Réponse|Antwort|Respuesta|解答|答え|الإجابة|الجواب)\s*[:=]\s*(.+)$/i;
   // Regex kunci inline di akhir baris opsi (misal: 'menggelikan KUNCI : A , D' atau 'perpustakaan KUNCI : A')
   const trailingKeyRegex = /\s+(?:\*+)?(?:Kunci(?:\s+Jawaban)?|Jawaban|Kunci\s+Soal|Answer(?:\s+Key)?|Correct\s+(?:Answer|Option))(?:\*+)?\s*[:=]\s*([^\n]+)$/i;
-  // Regex pembahasan multilingual (termasuk 'Pembahasan' berdiri sendiri tanpa titik dua)
-  const pembRegex = /^(?:Pembahasan|Penjelasan|Rasionalisasi|Explanation|Discussion|Solution)(?:\s*[:=]\s*(.*)|\s*)$/i;
+  // Regex pembahasan multilingual (termasuk 'Pembahasan' berdiri sendiri atau diikuti langsung teks tanpa titik dua)
+  const pembRegex = /^(?:Pembahasan|Penjelasan|Rasionalisasi|Explanation|Discussion|Solution)(?:\s*[:=]\s*(.*)|\s+(.*)|\s*)$/i;
   // Regex kunci isian dalam kurung di akhir pertanyaan: 'disebut ... (Orbital)' atau '... adalah … (2555 Mn)'
   const parenKeyRegex = /\(\s*([0-9A-Za-z\/\-\s<>_]{1,50})\s*\)\s*(?:\*+)?\s*$/i;
   // Regex baris pernyataan Benar/Salah dengan kunci di akhir: 'Jumlah proton... (Benar)'
@@ -1327,6 +1355,21 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
             continue;
           }
         }
+        if (currentQ.explicitTipe === 'BENAR_SALAH') {
+          const parsedBsRows = [];
+          for (const row of tables[tblIdx]) {
+            const bsItem = parseAfrestoBsStatement(Array.isArray(row) ? row.join(' ') : String(row || ''));
+            if (bsItem) parsedBsRows.push(bsItem);
+          }
+          if (parsedBsRows.length >= 1) {
+            if (!currentQ.bsItems) currentQ.bsItems = [];
+            currentQ.bsItems.push(...parsedBsRows);
+            currentQ.skipMarkdownTableRows = true;
+            currentQ.inPembahasan = false;
+            inOptions = false;
+            continue;
+          }
+        }
         const extractedOpts = extractOptionsFromTable(tables[tblIdx]);
         if (extractedOpts && Object.keys(currentQ.opsi).length === 0) {
           currentQ.opsi = extractedOpts;
@@ -1441,6 +1484,26 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue; // Belum masuk butir soal (misal KOP naskah)
     }
 
+    // Ekstrak pernyataan Benar/Salah format Afresto Legacy ("Pernyataan: ... Hasil Pernyataan : BENAR/SALAH") sebelum label generic Pernyataan:
+    if (!inOptions && !currentQ.inPembahasan) {
+      const directBs = parseAfrestoBsStatement(plainLine);
+      if (directBs) {
+        if (!currentQ.bsItems) currentQ.bsItems = [];
+        currentQ.bsItems.push(directBs);
+        continue;
+      }
+      if (currentQ.explicitTipe === 'BENAR_SALAH' && /^Pernyataan\s*[:=]/i.test(plainLine) && i + 1 < lines.length) {
+        const nextPlain = stripMarkdownMarks(lines[i + 1]);
+        const combinedBs = parseAfrestoBsStatement(`${plainLine} ${nextPlain}`);
+        if (combinedBs) {
+          if (!currentQ.bsItems) currentQ.bsItems = [];
+          currentQ.bsItems.push(combinedBs);
+          i += 1;
+          continue;
+        }
+      }
+    }
+
     // Lewati label murni 'Pertanyaan:' / 'Soal:' / 'Pernyataan:' agar tidak mengotori badan teks pertanyaan
     if (!inOptions && !currentQ.inPembahasan) {
       const pLabelMatch = plainLine.match(/^(?:Pertanyaan|Soal|Pernyataan)\s*[:=]\s*(.*)$/i);
@@ -1452,12 +1515,19 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       }
     }
 
-    // Cek baris pembahasan (termasuk 'Pembahasan' berdiri sendiri tanpa titik dua)
+    // Cek baris pembahasan (termasuk 'Pembahasan' berdiri sendiri atau diikuti langsung teks)
     const pembMatch = plainLine.match(pembRegex);
     if (pembMatch) {
-      currentQ.pembahasan = (pembMatch[1] || '').trim();
+      const pembText = (pembMatch[1] || pembMatch[2] || '').trim();
+      currentQ.pembahasan = pembText;
       currentQ.inPembahasan = true;
       inOptions = false;
+      if (currentQ.explicitTipe === 'BENAR_SALAH' && pembText) {
+        const parsedBsKeys = parseBsPembahasanKeys(pembText);
+        if (Object.keys(parsedBsKeys).length > 0) {
+          currentQ.bsFallbackKeys = Object.assign(currentQ.bsFallbackKeys || {}, parsedBsKeys);
+        }
+      }
       continue;
     }
 
@@ -1517,9 +1587,10 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue;
     }
 
-    // Cek baris opsi tunggal A-E (atau F-J)
+    // Cek baris opsi tunggal A-E (atau F-J), kecuali sedang berada di dalam Pembahasan soal yang sudah lengkap
     const optMatch = workingLine.match(optRegex);
-    if (optMatch) {
+    const isDiscussionEcho = optMatch && currentQ.inPembahasan && (Boolean(currentQ.opsi[optMatch[1].toUpperCase()]) || currentQ.hasExplicitKey);
+    if (optMatch && !isDiscussionEcho) {
       inOptions = true;
       currentQ.inPembahasan = false;
       let letter = optMatch[1].toUpperCase();
@@ -1543,16 +1614,25 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       continue;
     }
 
-    // Cek gambar embed
+    // Cek gambar embed (dukung 1 maupun >1 gambar dalam satu butir soal)
     const imgMatch = line.match(/\[GAMBAR_EMBED:\s*([^\]]+)\]/i);
     if (imgMatch) {
-      currentQ.gambarTag = imgMatch[1].trim();
+      const tag = imgMatch[1].trim();
+      if (!currentQ.gambarTags) currentQ.gambarTags = [];
+      if (!currentQ.gambarTags.includes(tag)) currentQ.gambarTags.push(tag);
+      currentQ.gambarTag = currentQ.gambarTags[0];
       continue;
     }
 
     // Jika sedang di dalam blok Pembahasan, tambahkan ke pembahasan (jangan merusak opsi atau pertanyaan)
     if (currentQ.inPembahasan) {
       currentQ.pembahasan = (currentQ.pembahasan ? currentQ.pembahasan + '\n' : '') + plainLine;
+      if (currentQ.explicitTipe === 'BENAR_SALAH') {
+        const parsedBsKeys = parseBsPembahasanKeys(plainLine);
+        if (Object.keys(parsedBsKeys).length > 0) {
+          currentQ.bsFallbackKeys = Object.assign(currentQ.bsFallbackKeys || {}, parsedBsKeys);
+        }
+      }
       continue;
     }
 
@@ -1584,8 +1664,13 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       if (currentQ.skipMarkdownTableRows || (inOptions && currentQ.tableOptionsTag)) {
         continue; // Lewati baris markdown jika tabel opsi atau tabel matching sudah diekstrak dari objek tabel
       }
-      // HANYA kumpulkan baris tabel ke stimulus pertanyaan jika belum masuk blok opsi
       if (!inOptions) {
+        const mdBsItem = parseAfrestoBsStatement(line);
+        if (mdBsItem && (currentQ.explicitTipe === 'BENAR_SALAH' || /Hasil\s+Pernyataan\s*[:=]/i.test(line))) {
+          if (!currentQ.bsItems) currentQ.bsItems = [];
+          currentQ.bsItems.push(mdBsItem);
+          continue;
+        }
         const cells = line.split('|').map(c => c.trim()).filter(Boolean);
         if (cells.length >= 2) {
           if (currentQ.explicitTipe === 'MENCOCOKKAN' || currentQ.matchingSectionSide) {
@@ -2092,10 +2177,23 @@ function finalizeQuestion(q, docxImages, tables = []) {
       }
       q.opsi = cleanOpsi;
       kunci = bsKunci;
+    } else if (q.bsItems && q.bsItems.length > 0) {
+      const opsiObj = {};
+      const kunciObj = {};
+      q.bsItems.forEach((item, idx) => {
+        const char = String.fromCharCode(65 + idx);
+        opsiObj[char] = item.teks.replace(/^\*\*|\*\*$/g, '').trim();
+        kunciObj[char] = item.nilai;
+      });
+      q.opsi = opsiObj;
+      kunci = kunciObj;
     } else {
       // Pernyataan Benar/Salah berada di dalam gambar/screenshot tersemat; tetap kunci tipe BENAR_SALAH
       q.opsi = {};
-      kunci = (kunci && typeof kunci === 'object' && !Array.isArray(kunci)) ? kunci : {};
+      const hasObjKunci = kunci && typeof kunci === 'object' && !Array.isArray(kunci) && Object.keys(kunci).length > 0;
+      kunci = hasObjKunci
+        ? kunci
+        : (q.bsFallbackKeys && Object.keys(q.bsFallbackKeys).length > 0 ? q.bsFallbackKeys : {});
     }
   }
   // 2. Deteksi Benar/Salah dari daftar baris pernyataan terpisah
@@ -2373,7 +2471,14 @@ function finalizeQuestion(q, docxImages, tables = []) {
     res._matchingLeftItems = q.matchingLeftItems;
   }
 
-  if (q.gambarTag && docxImages[q.gambarTag]) {
+  const validImgList = Array.isArray(q.gambarTags)
+    ? q.gambarTags.map(t => docxImages[t]).filter(Boolean)
+    : [];
+  if (validImgList.length > 0) {
+    res.gambar_base64 = validImgList[0];
+    if (validImgList.length > 1) res.gambar_list = validImgList;
+    res.butuh_gambar = true;
+  } else if (q.gambarTag && docxImages[q.gambarTag]) {
     res.gambar_base64 = docxImages[q.gambarTag];
     res.butuh_gambar = true;
   }

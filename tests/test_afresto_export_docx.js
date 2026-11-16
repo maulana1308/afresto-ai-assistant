@@ -286,4 +286,61 @@ assert.deepStrictEqual(Object.keys(multiNumQs[1].opsi), ['A', 'B', 'C'], 'Soal #
 assert.strictEqual(multiNumQs[1].kunci, 'C');
 console.log('✔ Test 9: Regresi daftar bersarang numId=2 di dalam numId=1 (jumlah & penomoran soal tetap presisi)');
 
+// #10 Regresi BENAR/SALAH format Afresto Legacy ("Pernyataan: ... Hasil Pernyataan : BENAR/SALAH", 5 pernyataan, Pembahasan tanpa titik dua) + Pembahasan PG diawali "D."
+const ekonomiBsSample = `
+Tipe Soal: PILIHAN GANDA
+Pertanyaan:
+Suatu wilayah memiliki tingkat pengangguran rendah...
+A. Opsi A asli
+B. Opsi B asli
+C. Opsi C asli
+D. Opsi D singkat asli
+E. Opsi E asli
+KUNCI : D
+Pembahasan
+D. Penjelasan panjang untuk opsi D agar tidak menimpa opsi D
+Tipe Soal: BENAR / SALAH Pernyataan:
+Literasi ekonomi dan keuangan digital
+| Pernyataan:  Biaya peluang adalah nilai alternatif terbaik yang dikorbankan ketika memilih suatu tindakan  Hasil Pernyataan : BENAR   |
+| Pernyataan:  Kenaikan harga barang selalu meningkatkan daya beli masyarakat  Hasil Pernyataan : SALAH   |
+| Pernyataan:  Kode OTP boleh diberikan kepada orang lain jika mengaku sebagai petugas bank  Hasil Pernyataan : SALAH   |
+| Pernyataan:  Anggaran keuangan membantu seseorang mengendalikan pengeluaran sesuai prioritas  Hasil Pernyataan : BENAR   |
+| Pernyataan:  Omzet usaha selalu sama dengan laba bersih usaha  Hasil Pernyataan : SALAH   |
+Pembahasan Penyataan 1 : Benar Penyataan 2 : Salah Penyataan 3 : Salah Penyataan 4 : Benar Penyataan 5 : Salah
+Tipe Soal: BENAR / SALAH Pernyataan:
+Badan usaha, manajemen, dan koperasi
+Pernyataan: Perencanaan mencakup penentuan tujuan Hasil Pernyataan : BENAR
+Pernyataan: Pengawasan membandingkan hasil dengan standar Hasil
+Pernyataan : BENAR
+Pernyataan: Kekuasaan koperasi ditentukan modal Hasil Pernyataan : SALAH
+Pembahasan Pernyataan 1 : Benar Pernyataan 2 : Benar Pernyataan 3 : Salah
+`;
+const ekoQs = parseQuestionsDirectly(ekonomiBsSample, {}, []);
+assert.strictEqual(ekoQs.length, 3);
+assert.strictEqual(ekoQs[0].opsi.D, 'Opsi D singkat asli', 'Pembahasan berawalan "D." tidak boleh menimpa opsi D');
+assert.strictEqual(ekoQs[1].tipe, 'BENAR_SALAH');
+assert.strictEqual(ekoQs[1].pertanyaan, 'Literasi ekonomi dan keuangan digital', 'Pernyataan B/S dan Pembahasan Penyataan tidak boleh bocor ke stem');
+assert.deepStrictEqual(Object.keys(ekoQs[1].opsi), ['A', 'B', 'C', 'D', 'E']);
+assert.strictEqual(ekoQs[1].opsi.A, 'Biaya peluang adalah nilai alternatif terbaik yang dikorbankan ketika memilih suatu tindakan');
+assert.deepStrictEqual(ekoQs[1].kunci, { A: 'Benar', B: 'Salah', C: 'Salah', D: 'Benar', E: 'Salah' });
+assert.strictEqual(ekoQs[2].tipe, 'BENAR_SALAH');
+assert.deepStrictEqual(Object.keys(ekoQs[2].opsi), ['A', 'B', 'C']);
+assert.deepStrictEqual(ekoQs[2].kunci, { A: 'Benar', B: 'Benar', C: 'Salah' });
+console.log('✔ Test 10: Regresi BENAR/SALAH format Afresto Legacy ("Hasil Pernyataan : BENAR/SALAH", 5 pernyataan, baris terpotong, & Pembahasan "D.") 100% akurat');
+
+// #11 Regresi BENAR/SALAH dengan >1 gambar tersemat & kunci fallback dari Pembahasan Penyataan 1..4
+const multiImgBsSample = `
+Tipe Soal: BENAR / SALAH Pernyataan:
+Perhatikan dua tabel gambar berikut!
+[GAMBAR_EMBED: rId10]
+[GAMBAR_EMBED: rId11]
+Pembahasan Penyataan 1 : Benar Penyataan 2 : Salah Penyataan 3 : Benar Penyataan 4 : Salah
+`;
+const multiImgQs = parseQuestionsDirectly(multiImgBsSample, { rId10: 'data:image/png;base64,AAA', rId11: 'data:image/png;base64,BBB' }, []);
+assert.strictEqual(multiImgQs.length, 1);
+assert.strictEqual(multiImgQs[0].tipe, 'BENAR_SALAH');
+assert.deepStrictEqual(multiImgQs[0].gambar_list, ['data:image/png;base64,AAA', 'data:image/png;base64,BBB']);
+assert.deepStrictEqual(multiImgQs[0].kunci, { A: 'Benar', B: 'Salah', C: 'Benar', D: 'Salah' });
+console.log('✔ Test 11: Regresi BENAR/SALAH multi-gambar (>1 gambar dalam 1 soal) & kunci Pembahasan terverifikasi');
+
 console.log('\n⭐ SEMUA TEST AFRESTO EXPORT FORMAT 100% PASS!');
