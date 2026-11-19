@@ -248,13 +248,16 @@ function parseDocxRelationships(relsXmlString) {
   const relsMap = {};
   if (!relsXmlString) return relsMap;
 
-  // Regex mencari <Relationship Id="rId..." Target="media/image1.png" .../>
-  const relRegex = /<Relationship[^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"/gi;
-  let match;
-  while ((match = relRegex.exec(relsXmlString)) !== null) {
-    const rId = match[1];
-    let target = match[2];
-    // Normalisasi target path (misal "media/image1.png" -> "word/media/image1.png")
+  // Regex mencari <Relationship .../> tanpa bergantung pada urutan atribut Id vs Target
+  const tagRegex = /<Relationship\b[^>]*>/gi;
+  let tagMatch;
+  while ((tagMatch = tagRegex.exec(relsXmlString)) !== null) {
+    const tag = tagMatch[0];
+    const idM = tag.match(/\bId="([^"]+)"/i);
+    const targetM = tag.match(/\bTarget="([^"]+)"/i);
+    if (!idM || !targetM) continue;
+    const rId = idM[1];
+    let target = targetM[1];
     if (!target.startsWith('word/')) {
       target = 'word/' + target.replace(/^\/+/, '');
     }
@@ -562,7 +565,7 @@ function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {}) {
           while ((pMatch = pRegex.exec(tcXml)) !== null) {
             let pText = extractTextRuns(pMatch[0]).trim();
             // Cek gambar embed di dalam sel/paragraf
-            const imgRegex = /(?:<a:blip[^>]*?r:embed="([^"]+)"|<v:imagedata[^>]*?r:id="([^"]+)")/gi;
+            const imgRegex = /(?:<a:blip[^>]*?(?:r:embed|r:link)="([^"]+)"|<v:imagedata[^>]*?(?:r:id|o:relid)="([^"]+)")/gi;
             let imgMatch;
             while ((imgMatch = imgRegex.exec(pMatch[0])) !== null) {
               const rId = imgMatch[1] || imgMatch[2];
@@ -636,6 +639,11 @@ function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {}) {
       const manualOptMatch = pText.match(/^(?:\*\*)?([A-Ea-e])[\.\)]/i);
       if (manualOptMatch) {
         listOptCounter = manualOptMatch[1].toUpperCase().charCodeAt(0) - 65 + 1;
+      } else if (!blockXml.includes('<w:numPr')) {
+        const trailOptSync = pText.replace(/\*\*/g, '').match(/(?:[\.\!\?\:]|\s)\s*(A)[\.\)]\s*$/);
+        if (trailOptSync) {
+          listOptCounter = 1;
+        }
       }
 
       // Periksa apakah paragraf ini menggunakan Auto-Numbering Word (<w:numPr>)
@@ -681,8 +689,8 @@ function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {}) {
         }
       }
 
-      // Periksa apakah paragraf ini menyematkan gambar (<a:blip r:embed="rId..."/> atau VML <v:imagedata r:id="rId..."/>)
-      const imgRegex = /(?:<a:blip[^>]*?r:embed="([^"]+)"|<v:imagedata[^>]*?r:id="([^"]+)")/gi;
+      // Periksa apakah paragraf ini menyematkan gambar (<a:blip r:embed="rId..."/> atau VML <v:imagedata r:id="rId..." / o:relid="rId..."/>)
+      const imgRegex = /(?:<a:blip[^>]*?(?:r:embed|r:link)="([^"]+)"|<v:imagedata[^>]*?(?:r:id|o:relid)="([^"]+)")/gi;
       let imgMatch;
       while ((imgMatch = imgRegex.exec(blockXml)) !== null) {
         const rId = imgMatch[1] || imgMatch[2];
@@ -1095,9 +1103,11 @@ function normalizeExtractedKey(raw) {
 function parseAfrestoBsStatement(raw) {
   const plain = stripMarkdownMarks(String(raw || '')).replace(/^\|+|\|+$/g, '').replace(/\s+/g, ' ').trim();
   if (!plain) return null;
-  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?(.+?)\s+Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)\s*$/i);
+  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?([\s\S]+?)\s*Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)(.*)$/i);
   if (!m) return null;
-  const teks = m[1].replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+  const trailing = (m[3] || '').trim();
+  if (trailing && trailing.replace(/<img\b[^>]*>/gi, '').trim() !== '') return null;
+  const teks = (m[1] + (trailing ? ' ' + trailing : '')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
   if (!teks) return null;
   return {
     teks,
@@ -1485,7 +1495,7 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     }
 
     // Ekstrak pernyataan Benar/Salah format Afresto Legacy ("Pernyataan: ... Hasil Pernyataan : BENAR/SALAH") sebelum label generic Pernyataan:
-    if (!inOptions && !currentQ.inPembahasan) {
+    if (!inOptions && !currentQ.inPembahasan && !(line.startsWith('|') && currentQ.skipMarkdownTableRows)) {
       const directBs = parseAfrestoBsStatement(plainLine);
       if (directBs) {
         if (!currentQ.bsItems) currentQ.bsItems = [];
@@ -1583,6 +1593,7 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         }
         optText = optText.replace(/\*\*/g, '').trim();
         currentQ.opsi[letter] = optText;
+        currentQ._lastOptLetter = letter;
       }
       continue;
     }
@@ -1611,13 +1622,35 @@ function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       }
       optText = optText.replace(/\*\*/g, '').trim();
       currentQ.opsi[letter] = optText;
+      currentQ._lastOptLetter = letter;
       continue;
     }
 
-    // Cek gambar embed (dukung 1 maupun >1 gambar dalam satu butir soal)
+    // Cek opsi "A." yang menempel di akhir kalimat tanya sebelum gambar/opsi B. (misal: "... adalah ... . A.")
+    if (!inOptions && !currentQ.inPembahasan && !currentQ.hasExplicitKey && i + 1 < lines.length) {
+      const trailOptM = plainLine.match(/^(.+?)\s+([A-E])[\.\)]\s*$/);
+      if (trailOptM && (/^\[GAMBAR_EMBED:/i.test(lines[i + 1]) || optRegex.test(lines[i + 1]))) {
+        const stemPrefix = line.replace(/\s*(?:\*\*)?[A-E][\.\)](?:\*\*)?\s*$/i, '').trim();
+        if (stemPrefix) currentQ.pertanyaanLines.push(stemPrefix);
+        inOptions = true;
+        const firstOptLetter = trailOptM[2].toUpperCase();
+        currentQ.opsi[firstOptLetter] = '';
+        currentQ._lastOptLetter = firstOptLetter;
+        continue;
+      }
+    }
+
+    // Cek gambar embed: jika sedang di dalam blok opsi sebelum Kunci/Pembahasan, tempelkan gambar ke opsi terakhir
     const imgMatch = line.match(/\[GAMBAR_EMBED:\s*([^\]]+)\]/i);
     if (imgMatch) {
       const tag = imgMatch[1].trim();
+      const targetOptLetter = currentQ._lastOptLetter || Object.keys(currentQ.opsi || {}).pop();
+      if (inOptions && !currentQ.inPembahasan && !currentQ.hasExplicitKey && targetOptLetter && docxImages[tag]) {
+        const imgTagHtml = `<img src="${docxImages[tag]}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+        const prevOpt = currentQ.opsi[targetOptLetter] || '';
+        currentQ.opsi[targetOptLetter] = prevOpt ? `${prevOpt} ${imgTagHtml}` : imgTagHtml;
+        continue;
+      }
       if (!currentQ.gambarTags) currentQ.gambarTags = [];
       if (!currentQ.gambarTags.includes(tag)) currentQ.gambarTags.push(tag);
       currentQ.gambarTag = currentQ.gambarTags[0];
@@ -2594,16 +2627,37 @@ function readImageDimensions(bytes, ext) {
   return fallback;
 }
 
+function buildDrawingRunXml(rId, docPrId, widthPx, heightPx, maxWidthEmu = 4800000) {
+  const pxToEmu = 9525;
+  let cx = Math.max(250000, Math.round(widthPx * pxToEmu));
+  let cy = Math.max(150000, Math.round(heightPx * pxToEmu));
+  if (cx > maxWidthEmu) {
+    const ratio = maxWidthEmu / cx;
+    cx = maxWidthEmu;
+    cy = Math.round(cy * ratio);
+  }
+  return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${docPrId}" name="Gambar ${docPrId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docPrId}" name="image_${docPrId}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+}
+
 /**
- * Mengonversi teks ber-tag inline sederhana (<b>, <strong>, <i>, <em>, <u>, **bold**)
+ * Mengonversi teks ber-tag inline sederhana (<b>, <strong>, <i>, <em>, <u>, <img src="data:image/...">, **bold**)
  * menjadi deretan elemen <w:r> OpenXML yang valid.
  */
 function buildInlineRunsXml(rawText, styleOpts = {}) {
-  const normalized = stripTagsAndNormalizeText(rawText)
+  const withImgTokens = String(rawText ?? '').replace(/<img\b[^>]*>/gi, (tag) => {
+    const srcM = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    if (srcM && typeof styleOpts.registerImage === 'function') {
+      const ref = styleOpts.registerImage(srcM[1]);
+      if (ref) return `\u0000IMG(${ref.rId}|${ref.docPrId}|${ref.widthPx}|${ref.heightPx})\u0000`;
+    }
+    return '';
+  });
+
+  const normalized = stripTagsAndNormalizeText(withImgTokens)
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
 
   const tokens = [];
-  const tagRegex = /(<\/?(?:b|strong|i|em|u|sup|sub)>|<[^>]+>)/gi;
+  const tagRegex = /(\u0000IMG\([^)]+\)\u0000|<\/?(?:b|strong|i|em|u|sup|sub)>|<[^>]+>)/gi;
   let lastIdx = 0;
   let bold = Boolean(styleOpts.bold);
   let italic = Boolean(styleOpts.italic);
@@ -2615,16 +2669,28 @@ function buildInlineRunsXml(rawText, styleOpts = {}) {
     if (m.index > lastIdx) {
       tokens.push({ text: normalized.slice(lastIdx, m.index), bold, italic, underline, vertAlign });
     }
-    const tag = m[1].toLowerCase();
-    if (tag === '<b>' || tag === '<strong>') bold = true;
-    else if (tag === '</b>' || tag === '</strong>') bold = Boolean(styleOpts.bold);
-    else if (tag === '<i>' || tag === '<em>') italic = true;
-    else if (tag === '</i>' || tag === '</em>') italic = Boolean(styleOpts.italic);
-    else if (tag === '<u>') underline = true;
-    else if (tag === '</u>') underline = Boolean(styleOpts.underline);
-    else if (tag === '<sup>') vertAlign = 'superscript';
-    else if (tag === '<sub>') vertAlign = 'subscript';
-    else if (tag === '</sup>' || tag === '</sub>') vertAlign = null;
+    const rawTok = m[1];
+    if (rawTok.startsWith('\u0000IMG(')) {
+      const parts = rawTok.slice(5, -2).split('|');
+      tokens.push({
+        isImage: true,
+        rId: parts[0],
+        docPrId: Number(parts[1]),
+        widthPx: Number(parts[2]),
+        heightPx: Number(parts[3])
+      });
+    } else {
+      const tag = rawTok.toLowerCase();
+      if (tag === '<b>' || tag === '<strong>') bold = true;
+      else if (tag === '</b>' || tag === '</strong>') bold = Boolean(styleOpts.bold);
+      else if (tag === '<i>' || tag === '<em>') italic = true;
+      else if (tag === '</i>' || tag === '</em>') italic = Boolean(styleOpts.italic);
+      else if (tag === '<u>') underline = true;
+      else if (tag === '</u>') underline = Boolean(styleOpts.underline);
+      else if (tag === '<sup>') vertAlign = 'superscript';
+      else if (tag === '<sub>') vertAlign = 'subscript';
+      else if (tag === '</sup>' || tag === '</sub>') vertAlign = null;
+    }
     lastIdx = tagRegex.lastIndex;
   }
   if (lastIdx < normalized.length) {
@@ -2637,10 +2703,14 @@ function buildInlineRunsXml(rawText, styleOpts = {}) {
 
   const colorHex = styleOpts.color || '';
   const sizeVal = styleOpts.size || '24';
+  const maxImgWidthEmu = styleOpts.maxImgWidthEmu || 3200000;
 
   return tokens
-    .filter(tok => tok.text !== '' || tokens.length === 1)
+    .filter(tok => tok.isImage || tok.text !== '' || tokens.length === 1)
     .map(tok => {
+      if (tok.isImage) {
+        return buildDrawingRunXml(tok.rId, tok.docPrId, tok.widthPx, tok.heightPx, maxImgWidthEmu);
+      }
       const rPrParts = [
         `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>`,
         tok.bold ? '<w:b/>' : '',
@@ -2680,16 +2750,7 @@ function buildParagraphXml(text, opts = {}) {
 }
 
 function buildImageParagraphXml(rId, docPrId, widthPx, heightPx) {
-  const maxWidthEmu = 4800000; // ~5.25 inci (aman untuk halaman A4 ber-margin)
-  const pxToEmu = 9525;
-  let cx = Math.max(400000, Math.round(widthPx * pxToEmu));
-  let cy = Math.max(250000, Math.round(heightPx * pxToEmu));
-  if (cx > maxWidthEmu) {
-    const ratio = maxWidthEmu / cx;
-    cx = maxWidthEmu;
-    cy = Math.round(cy * ratio);
-  }
-  return `<w:p><w:pPr><w:ind w:left="360"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${docPrId}" name="Gambar ${docPrId}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docPrId}" name="image_${docPrId}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+  return `<w:p><w:pPr><w:ind w:left="360"/></w:pPr>${buildDrawingRunXml(rId, docPrId, widthPx, heightPx, 4800000)}</w:p>`;
 }
 
 function splitLinesForParagraphs(text) {
@@ -2741,7 +2802,7 @@ function buildMatchingTableXml(pasangan, allocateNumId) {
     `<w:tblGrid><w:gridCol w:w="4500"/><w:gridCol w:w="4500"/></w:tblGrid>${headerRow}${bodyRows}</w:tbl>`;
 }
 
-function buildBenarSalahTableXml(opsi, kunci) {
+function buildBenarSalahTableXml(opsi, kunci, registerImage = null) {
   const entries = Object.entries(opsi || {});
   const rowsData = entries.length > 0
     ? entries.map(([letter, text], idx) => {
@@ -2766,7 +2827,7 @@ function buildBenarSalahTableXml(opsi, kunci) {
     const salahMark = row.isBenar ? '' : 'v';
     return `<w:tr>` +
       `<w:tc><w:tcPr><w:tcW w:w="500" w:type="dxa"/></w:tcPr>${buildParagraphXml(row.no, { align: 'center' })}</w:tc>` +
-      `<w:tc><w:tcPr><w:tcW w:w="5700" w:type="dxa"/></w:tcPr>${buildParagraphXml(row.text)}</w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="5700" w:type="dxa"/></w:tcPr>${buildParagraphXml(row.text, { registerImage, maxImgWidthEmu: 2400000 })}</w:tc>` +
       `<w:tc><w:tcPr><w:tcW w:w="1400" w:type="dxa"/></w:tcPr>${buildParagraphXml(benarMark, { align: 'center' })}</w:tc>` +
       `<w:tc><w:tcPr><w:tcW w:w="1400" w:type="dxa"/></w:tcPr>${buildParagraphXml(salahMark, { align: 'center' })}</w:tc>` +
       `</w:tr>`;
@@ -2932,6 +2993,10 @@ async function buildAfrestoNextDocx(questions, options = {}) {
     const firstStem = stemLines[0] || `Soal #${i + 1}`;
     const restStem = stemLines.slice(1);
 
+    const stemImgs = (Array.isArray(q.gambar_list) && q.gambar_list.length > 0
+      ? q.gambar_list
+      : (q.gambar_base64 ? [q.gambar_base64] : [])).filter(Boolean);
+
     if (tipe === 'BENAR_SALAH') {
       const hasTextStatements = Object.keys(q.opsi || {}).length >= 2;
       if (!hasTextStatements) {
@@ -2942,28 +3007,30 @@ async function buildAfrestoNextDocx(questions, options = {}) {
         ? `Jawab soal berikut dengan memberikan pernyataan salah/benar ! ${firstStem}`
         : firstStem;
       bsHeaderEmitted = true;
-      bodyChunks.push(buildParagraphXml(bsPrompt, { numId: 1, bold: true }));
+      bodyChunks.push(buildParagraphXml(bsPrompt, { numId: 1, bold: true, registerImage, maxImgWidthEmu: 4800000 }));
       for (const line of restStem) {
-        bodyChunks.push(buildParagraphXml(line));
+        bodyChunks.push(buildParagraphXml(line, { registerImage, maxImgWidthEmu: 4800000 }));
       }
 
-      // Jangan bocorkan gambar screenshot Legacy jika pernyataannya sudah diekstrak ke tabel teks
-      const shouldEmbedImg = Boolean(q.gambar_base64) && (!hasTextStatements || q._ocrExtracted === false);
+      // Jangan bocorkan gambar screenshot Legacy jika pernyataannya sudah diekstrak ke tabel teks (kecuali gambar memang stimulus B/S)
+      const shouldEmbedImg = stemImgs.length > 0 && (!hasTextStatements || q._ocrExtracted === false || q._ocrExtracted === undefined);
       if (shouldEmbedImg) {
-        const imgRef = registerImage(q.gambar_base64);
-        if (imgRef) {
-          bodyChunks.push(buildImageParagraphXml(imgRef.rId, imgRef.docPrId, imgRef.widthPx, imgRef.heightPx));
+        for (const imgUrl of stemImgs) {
+          const imgRef = registerImage(imgUrl);
+          if (imgRef) {
+            bodyChunks.push(buildImageParagraphXml(imgRef.rId, imgRef.docPrId, imgRef.widthPx, imgRef.heightPx));
+          }
         }
       }
 
-      bodyChunks.push(buildBenarSalahTableXml(q.opsi, q.kunci));
+      bodyChunks.push(buildBenarSalahTableXml(q.opsi, q.kunci, registerImage));
     } else if (tipe === 'MENCOCOKKAN') {
-      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1 }));
+      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1, registerImage, maxImgWidthEmu: 4800000 }));
       for (const line of restStem) {
-        bodyChunks.push(buildParagraphXml(line));
+        bodyChunks.push(buildParagraphXml(line, { registerImage, maxImgWidthEmu: 4800000 }));
       }
-      if (q.gambar_base64) {
-        const imgRef = registerImage(q.gambar_base64);
+      for (const imgUrl of stemImgs) {
+        const imgRef = registerImage(imgUrl);
         if (imgRef) {
           bodyChunks.push(buildImageParagraphXml(imgRef.rId, imgRef.docPrId, imgRef.widthPx, imgRef.heightPx));
         }
@@ -2973,12 +3040,12 @@ async function buildAfrestoNextDocx(questions, options = {}) {
         : [{ kiri: 'Item 1', kanan: 'Pasangan A', kunci: 'A' }, { kiri: 'Item 2', kanan: 'Pasangan B', kunci: 'B' }];
       bodyChunks.push(buildMatchingTableXml(pasangan, allocateNumId));
     } else if (tipe === 'PG' || tipe === 'PG_KOMPLEKS') {
-      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1 }));
+      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1, registerImage, maxImgWidthEmu: 4800000 }));
       for (const line of restStem) {
-        bodyChunks.push(buildParagraphXml(line));
+        bodyChunks.push(buildParagraphXml(line, { registerImage, maxImgWidthEmu: 4800000 }));
       }
-      if (q.gambar_base64) {
-        const imgRef = registerImage(q.gambar_base64);
+      for (const imgUrl of stemImgs) {
+        const imgRef = registerImage(imgUrl);
         if (imgRef) {
           bodyChunks.push(buildImageParagraphXml(imgRef.rId, imgRef.docPrId, imgRef.widthPx, imgRef.heightPx));
         }
@@ -2996,17 +3063,19 @@ async function buildAfrestoNextDocx(questions, options = {}) {
         bodyChunks.push(buildParagraphXml(String(optVal || ''), {
           numId: optNumId,
           color: isCorrect ? 'EE0000' : '',
-          bold: isCorrect
+          bold: isCorrect,
+          registerImage,
+          maxImgWidthEmu: 3200000
         }));
       }
     } else {
       // ISIAN / URAIAN
-      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1 }));
+      bodyChunks.push(buildParagraphXml(firstStem, { numId: 1, registerImage, maxImgWidthEmu: 4800000 }));
       for (const line of restStem) {
-        bodyChunks.push(buildParagraphXml(line));
+        bodyChunks.push(buildParagraphXml(line, { registerImage, maxImgWidthEmu: 4800000 }));
       }
-      if (q.gambar_base64) {
-        const imgRef = registerImage(q.gambar_base64);
+      for (const imgUrl of stemImgs) {
+        const imgRef = registerImage(imgUrl);
         if (imgRef) {
           bodyChunks.push(buildImageParagraphXml(imgRef.rId, imgRef.docPrId, imgRef.widthPx, imgRef.heightPx));
         }

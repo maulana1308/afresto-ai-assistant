@@ -3,7 +3,7 @@
  * Built by : Maulana Ibrahim
  */
 import assert from 'assert';
-import { convertDocumentXmlToText, parseQuestionsDirectly } from '../scripts/docx_parser.js';
+import { convertDocumentXmlToText, parseDocxRelationships, parseQuestionsDirectly } from '../scripts/docx_parser.js';
 
 console.log('=== TEST SUITE: AFRESTO EXPORT FORMAT (PG KOMPLEKS & BENAR/SALAH) ===');
 
@@ -342,5 +342,83 @@ assert.strictEqual(multiImgQs[0].tipe, 'BENAR_SALAH');
 assert.deepStrictEqual(multiImgQs[0].gambar_list, ['data:image/png;base64,AAA', 'data:image/png;base64,BBB']);
 assert.deepStrictEqual(multiImgQs[0].kunci, { A: 'Benar', B: 'Salah', C: 'Benar', D: 'Salah' });
 console.log('✔ Test 11: Regresi BENAR/SALAH multi-gambar (>1 gambar dalam 1 soal) & kunci Pembahasan terverifikasi');
+
+// #12 Regresi soal PG bergambar di batang soal (#1 PCl3) + bergambar di opsi A-E (#2 NH3) + trailing A.
+function makeImgP(rId) {
+  return `<w:p><w:r><w:drawing><wp:inline><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="${rId}"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
+function makeNumOptWithImgP(text, rId, numId = '99') {
+  return `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r><w:r><w:drawing><wp:inline><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="${rId}"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
+const kimImgXml = `<w:document><w:body>
+  ${makePlainP('1. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  ${makePlainP('Perhatikan gambar bentuk molekul senyawa PCl3 di bawah ini !')}
+  ${makeImgP('rId10')}
+  ${makePlainP('Jumlah DEB dan DEI berturut-turut adalah ... .')}
+  ${makeNumP('1 dan 3\tD. 3 dan 2', '99')}
+  ${makeNumP('2 dan 3\tE. 4 dan 3', '99')}
+  ${makeNumP('3 dan 1', '99')}
+  ${makePlainP('KUNCI : A')}
+  ${makePlainP('Pembahasan')}
+  ${makePlainP('2. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  ${makePlainP('Senyawa amoniak NH3 memiliki elektron valensi 5 dan 1.')}
+  ${makeImgP('rId11')}
+  ${makePlainP('Bentuk molekul senyawa amonia adalah ... . A.')}
+  ${makeImgP('rId12')}
+  ${makeNumOptWithImgP('', 'rId13', '98')}
+  ${makeNumOptWithImgP('', 'rId14', '98')}
+  ${makeNumOptWithImgP('', 'rId15', '98')}
+  ${makeNumOptWithImgP('', 'rId16', '98')}
+  ${makePlainP('KUNCI : D')}
+  ${makePlainP('Pembahasan')}
+</w:body></w:document>`;
+const kimImgs = {
+  rId10: 'data:image/png;base64,IMG10',
+  rId11: 'data:image/png;base64,IMG11',
+  rId12: 'data:image/png;base64,IMG12',
+  rId13: 'data:image/png;base64,IMG13',
+  rId14: 'data:image/png;base64,IMG14',
+  rId15: 'data:image/png;base64,IMG15',
+  rId16: 'data:image/png;base64,IMG16'
+};
+const kimConv = convertDocumentXmlToText(kimImgXml, kimImgs, { '98': { 0: 'upperLetter' }, '99': { 0: 'upperLetter' } });
+const kimQs = parseQuestionsDirectly(kimConv.text, kimImgs, kimConv.tables);
+assert.strictEqual(kimQs.length, 2);
+assert.strictEqual(kimQs[0].gambar_base64, 'data:image/png;base64,IMG10', 'Soal #1 harus menyimpan gambar PCl3');
+assert.strictEqual(kimQs[0].kunci, 'A');
+assert.strictEqual(kimQs[1].gambar_base64, 'data:image/png;base64,IMG11', 'Soal #2 harus menyimpan gambar NH3 di stem');
+assert.ok(!kimQs[1].pertanyaan.endsWith('A.'), 'Trailing A. di akhir pertanyaan tidak boleh tertinggal');
+assert.deepStrictEqual(Object.keys(kimQs[1].opsi), ['A', 'B', 'C', 'D', 'E']);
+['A', 'B', 'C', 'D', 'E'].forEach((l, i) => {
+  assert.ok(kimQs[1].opsi[l].includes(`data:image/png;base64,IMG${12 + i}`), `Opsi ${l} harus memuat gambar opsi masing-masing`);
+});
+assert.ok(!kimQs[1].gambar_list, 'Gambar opsi A-E tidak boleh bocor masuk ke gambar stem soal #2');
+assert.strictEqual(kimQs[1].kunci, 'D');
+console.log('✔ Test 12: Regresi PG bergambar di stem (#1) dan gambar di setiap opsi A-E (#2) 100% akurat');
+
+// #13 Regresi multi-gambar stem (#11 5 gambar) + o:relid VML + Target sebelum Id di rels + B/S tabel rumus gambar (#38)
+const relMapSwapped = parseDocxRelationships(`<Relationships><Relationship Target="media/eq1.png" Id="rId21"/><Relationship Id="rId22" Target="word/media/eq2.png"/></Relationships>`);
+assert.strictEqual(relMapSwapped.rId21, 'word/media/eq1.png');
+assert.strictEqual(relMapSwapped.rId22, 'word/media/eq2.png');
+
+const vmlXml = `<w:document><w:body>
+  ${makePlainP('1. Tipe Soal: BENAR / SALAH Pernyataan:')}
+  ${makePlainP('Diketahui entalpi beberapa zat:')}
+  <w:p><w:r><w:pict><v:shape><v:imagedata o:relid="rId21"/></v:shape></w:pict></w:r></w:p>
+  ${makePlainP('Untuk pembakaran sempurna 1 mol gas propana:')}
+  ${makeImgP('rId22')}
+  <w:tbl><w:tr><w:tc><w:p><w:r><w:t>Pernyataan: Rumus:</w:t></w:r><w:r><w:drawing><wp:inline><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="rId21"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r><w:r><w:t>Hasil Pernyataan : BENAR</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>Pernyataan: Nilai dH O2 adalah 0 Hasil Pernyataan : BENAR</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+  ${makePlainP('Pembahasan')}
+</w:body></w:document>`;
+const vmlImgs = { rId21: 'data:image/png;base64,EQ1', rId22: 'data:image/png;base64,EQ2' };
+const vmlConv = convertDocumentXmlToText(vmlXml, vmlImgs, {});
+const vmlQs = parseQuestionsDirectly(vmlConv.text, vmlImgs, vmlConv.tables);
+assert.strictEqual(vmlQs.length, 1);
+assert.deepStrictEqual(vmlQs[0].gambar_list, ['data:image/png;base64,EQ1', 'data:image/png;base64,EQ2'], 'VML o:relid & drawing di B/S harus terbaca keduanya');
+assert.ok(vmlQs[0].opsi.A.includes('data:image/png;base64,EQ1'), 'Gambar rumus di dalam tabel B/S harus ikut tersimpan ke opsi.A');
+assert.deepStrictEqual(vmlQs[0].kunci, { A: 'Benar', B: 'Benar' });
+console.log('✔ Test 13: Regresi VML o:relid, urutan atribut rels, multi-gambar stem, & gambar dalam tabel B/S 100% pass');
 
 console.log('\n⭐ SEMUA TEST AFRESTO EXPORT FORMAT 100% PASS!');

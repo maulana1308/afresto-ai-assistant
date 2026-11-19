@@ -241,13 +241,16 @@ export function parseDocxRelationships(relsXmlString) {
   const relsMap = {};
   if (!relsXmlString) return relsMap;
 
-  // Regex mencari <Relationship Id="rId..." Target="media/image1.png" .../>
-  const relRegex = /<Relationship[^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"/gi;
-  let match;
-  while ((match = relRegex.exec(relsXmlString)) !== null) {
-    const rId = match[1];
-    let target = match[2];
-    // Normalisasi target path (misal "media/image1.png" -> "word/media/image1.png")
+  // Regex mencari <Relationship .../> tanpa bergantung pada urutan atribut Id vs Target
+  const tagRegex = /<Relationship\b[^>]*>/gi;
+  let tagMatch;
+  while ((tagMatch = tagRegex.exec(relsXmlString)) !== null) {
+    const tag = tagMatch[0];
+    const idM = tag.match(/\bId="([^"]+)"/i);
+    const targetM = tag.match(/\bTarget="([^"]+)"/i);
+    if (!idM || !targetM) continue;
+    const rId = idM[1];
+    let target = targetM[1];
     if (!target.startsWith('word/')) {
       target = 'word/' + target.replace(/^\/+/, '');
     }
@@ -555,7 +558,7 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
           while ((pMatch = pRegex.exec(tcXml)) !== null) {
             let pText = extractTextRuns(pMatch[0]).trim();
             // Cek gambar embed di dalam sel/paragraf
-            const imgRegex = /(?:<a:blip[^>]*?r:embed="([^"]+)"|<v:imagedata[^>]*?r:id="([^"]+)")/gi;
+            const imgRegex = /(?:<a:blip[^>]*?(?:r:embed|r:link)="([^"]+)"|<v:imagedata[^>]*?(?:r:id|o:relid)="([^"]+)")/gi;
             let imgMatch;
             while ((imgMatch = imgRegex.exec(pMatch[0])) !== null) {
               const rId = imgMatch[1] || imgMatch[2];
@@ -629,6 +632,11 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
       const manualOptMatch = pText.match(/^(?:\*\*)?([A-Ea-e])[\.\)]/i);
       if (manualOptMatch) {
         listOptCounter = manualOptMatch[1].toUpperCase().charCodeAt(0) - 65 + 1;
+      } else if (!blockXml.includes('<w:numPr')) {
+        const trailOptSync = pText.replace(/\*\*/g, '').match(/(?:[\.\!\?\:]|\s)\s*(A)[\.\)]\s*$/);
+        if (trailOptSync) {
+          listOptCounter = 1;
+        }
       }
 
       // Periksa apakah paragraf ini menggunakan Auto-Numbering Word (<w:numPr>)
@@ -674,8 +682,8 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
         }
       }
 
-      // Periksa apakah paragraf ini menyematkan gambar (<a:blip r:embed="rId..."/> atau VML <v:imagedata r:id="rId..."/>)
-      const imgRegex = /(?:<a:blip[^>]*?r:embed="([^"]+)"|<v:imagedata[^>]*?r:id="([^"]+)")/gi;
+      // Periksa apakah paragraf ini menyematkan gambar (<a:blip r:embed="rId..."/> atau VML <v:imagedata r:id="rId..." / o:relid="rId..."/>)
+      const imgRegex = /(?:<a:blip[^>]*?(?:r:embed|r:link)="([^"]+)"|<v:imagedata[^>]*?(?:r:id|o:relid)="([^"]+)")/gi;
       let imgMatch;
       while ((imgMatch = imgRegex.exec(blockXml)) !== null) {
         const rId = imgMatch[1] || imgMatch[2];
@@ -1088,9 +1096,11 @@ function normalizeExtractedKey(raw) {
 function parseAfrestoBsStatement(raw) {
   const plain = stripMarkdownMarks(String(raw || '')).replace(/^\|+|\|+$/g, '').replace(/\s+/g, ' ').trim();
   if (!plain) return null;
-  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?(.+?)\s+Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)\s*$/i);
+  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?([\s\S]+?)\s*Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)(.*)$/i);
   if (!m) return null;
-  const teks = m[1].replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+  const trailing = (m[3] || '').trim();
+  if (trailing && trailing.replace(/<img\b[^>]*>/gi, '').trim() !== '') return null;
+  const teks = (m[1] + (trailing ? ' ' + trailing : '')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
   if (!teks) return null;
   return {
     teks,
@@ -1478,7 +1488,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     }
 
     // Ekstrak pernyataan Benar/Salah format Afresto Legacy ("Pernyataan: ... Hasil Pernyataan : BENAR/SALAH") sebelum label generic Pernyataan:
-    if (!inOptions && !currentQ.inPembahasan) {
+    if (!inOptions && !currentQ.inPembahasan && !(line.startsWith('|') && currentQ.skipMarkdownTableRows)) {
       const directBs = parseAfrestoBsStatement(plainLine);
       if (directBs) {
         if (!currentQ.bsItems) currentQ.bsItems = [];
@@ -1576,6 +1586,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         }
         optText = optText.replace(/\*\*/g, '').trim();
         currentQ.opsi[letter] = optText;
+        currentQ._lastOptLetter = letter;
       }
       continue;
     }
@@ -1604,13 +1615,35 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       }
       optText = optText.replace(/\*\*/g, '').trim();
       currentQ.opsi[letter] = optText;
+      currentQ._lastOptLetter = letter;
       continue;
     }
 
-    // Cek gambar embed (dukung 1 maupun >1 gambar dalam satu butir soal)
+    // Cek opsi "A." yang menempel di akhir kalimat tanya sebelum gambar/opsi B. (misal: "... adalah ... . A.")
+    if (!inOptions && !currentQ.inPembahasan && !currentQ.hasExplicitKey && i + 1 < lines.length) {
+      const trailOptM = plainLine.match(/^(.+?)\s+([A-E])[\.\)]\s*$/);
+      if (trailOptM && (/^\[GAMBAR_EMBED:/i.test(lines[i + 1]) || optRegex.test(lines[i + 1]))) {
+        const stemPrefix = line.replace(/\s*(?:\*\*)?[A-E][\.\)](?:\*\*)?\s*$/i, '').trim();
+        if (stemPrefix) currentQ.pertanyaanLines.push(stemPrefix);
+        inOptions = true;
+        const firstOptLetter = trailOptM[2].toUpperCase();
+        currentQ.opsi[firstOptLetter] = '';
+        currentQ._lastOptLetter = firstOptLetter;
+        continue;
+      }
+    }
+
+    // Cek gambar embed: jika sedang di dalam blok opsi sebelum Kunci/Pembahasan, tempelkan gambar ke opsi terakhir
     const imgMatch = line.match(/\[GAMBAR_EMBED:\s*([^\]]+)\]/i);
     if (imgMatch) {
       const tag = imgMatch[1].trim();
+      const targetOptLetter = currentQ._lastOptLetter || Object.keys(currentQ.opsi || {}).pop();
+      if (inOptions && !currentQ.inPembahasan && !currentQ.hasExplicitKey && targetOptLetter && docxImages[tag]) {
+        const imgTagHtml = `<img src="${docxImages[tag]}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+        const prevOpt = currentQ.opsi[targetOptLetter] || '';
+        currentQ.opsi[targetOptLetter] = prevOpt ? `${prevOpt} ${imgTagHtml}` : imgTagHtml;
+        continue;
+      }
       if (!currentQ.gambarTags) currentQ.gambarTags = [];
       if (!currentQ.gambarTags.includes(tag)) currentQ.gambarTags.push(tag);
       currentQ.gambarTag = currentQ.gambarTags[0];

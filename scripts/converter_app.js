@@ -173,6 +173,31 @@
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function renderRichTextWithSafeImages(raw) {
+    const str = String(raw ?? '');
+    const safeTokenRx = /(<img\b[^>]*\bsrc\s*=\s*["'](data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=\s]+)["'][^>]*>|<\/?(?:sup|sub|b|i)>|<br\s*\/?>)/gi;
+    let out = '';
+    let lastIdx = 0;
+    let m;
+    while ((m = safeTokenRx.exec(str)) !== null) {
+      if (m.index > lastIdx) {
+        out += escapeHtml(str.slice(lastIdx, m.index).replace(/<[^>]+>/g, ''));
+      }
+      if (m[2]) {
+        const cleanSrc = m[2].replace(/\s+/g, '');
+        out += `<img src="${cleanSrc}" alt="Gambar lampiran soal" class="q-inline-img">`;
+      } else {
+        const t = m[1].toLowerCase().replace(/\s*\/?>$/, '>');
+        out += t === '<br>' ? '<br>' : m[1].toLowerCase();
+      }
+      lastIdx = safeTokenRx.lastIndex;
+    }
+    if (lastIdx < str.length) {
+      out += escapeHtml(str.slice(lastIdx).replace(/<[^>]+>/g, ''));
+    }
+    return out;
+  }
+
   function getQuestionImages(q) {
     if (!q) return [];
     if (Array.isArray(q.gambar_list) && q.gambar_list.length > 0) {
@@ -260,12 +285,12 @@
         const opts = Object.entries(q.opsi || {}).sort(([a], [b]) => a.localeCompare(b));
         bodyHtml = `<ul class="q-opts">` + opts.map(([letter, text]) => {
           const isKey = keySet.has(letter.toUpperCase());
-          return `<li class="q-opt ${isKey ? 'is-key' : ''}">${letter}. ${escapeHtml(text)}${isKey ? ' <strong>(Kunci)</strong>' : ''}</li>`;
+          return `<li class="q-opt ${isKey ? 'is-key' : ''}">${letter}. ${renderRichTextWithSafeImages(text)}${isKey ? ' <strong>(Kunci)</strong>' : ''}</li>`;
         }).join('') + `</ul>`;
       } else if (tipe === 'MENCOCOKKAN') {
         const pairs = q.pasangan || [];
         bodyHtml = `<table class="bs-preview-table"><thead><tr><th>SOAL</th><th>JAWABAN</th></tr></thead><tbody>` +
-          pairs.map((p, pi) => `<tr><td>${pi + 1}. ${escapeHtml(p.kiri)} <br><small>Kunci : ${escapeHtml(p.kunci || String.fromCharCode(65 + pi))}</small></td><td>${String.fromCharCode(65 + pi)}. ${escapeHtml(p.kanan)}</td></tr>`).join('') +
+          pairs.map((p, pi) => `<tr><td>${pi + 1}. ${renderRichTextWithSafeImages(p.kiri)} <br><small>Kunci : ${escapeHtml(p.kunci || String.fromCharCode(65 + pi))}</small></td><td>${String.fromCharCode(65 + pi)}. ${renderRichTextWithSafeImages(p.kanan)}</td></tr>`).join('') +
           `</tbody></table>`;
       } else if (tipe === 'BENAR_SALAH') {
         const entries = Object.entries(q.opsi || {});
@@ -273,7 +298,7 @@
           bodyHtml = `<table class="bs-preview-table"><thead><tr><th style="width:42px;">No</th><th>Pernyataan</th><th style="width:72px;">Benar</th><th style="width:72px;">Salah</th></tr></thead><tbody>` +
             entries.map(([letter, txt], rIdx) => {
               const isB = !/salah|false/i.test(String((q.kunci && q.kunci[letter]) || 'Benar'));
-              return `<tr><td class="center">${rIdx + 1}</td><td>${escapeHtml(txt)}</td><td class="center">${isB ? 'v' : ''}</td><td class="center">${isB ? '' : 'v'}</td></tr>`;
+              return `<tr><td class="center">${rIdx + 1}</td><td>${renderRichTextWithSafeImages(txt)}</td><td class="center">${isB ? 'v' : ''}</td><td class="center">${isB ? '' : 'v'}</td></tr>`;
             }).join('') +
             `</tbody></table>`;
         } else {
@@ -314,6 +339,10 @@
       }
 
       const isBsReady = tipe !== 'BENAR_SALAH' || Object.keys(q.opsi || {}).length >= 2;
+      const stemImgs = getQuestionImages(q);
+      const stemImgsHtml = (stemImgs.length > 0 && (tipe !== 'BENAR_SALAH' || isBsReady))
+        ? `<div class="q-stem-imgs">${stemImgs.map((imgUrl, imIdx) => `<img src="${imgUrl}" alt="Gambar soal #${idx + 1} (${imIdx + 1}/${stemImgs.length})" class="q-stem-img">`).join('')}</div>`
+        : '';
       return `
         <article class="q-card">
           <div class="q-card-head">
@@ -323,7 +352,8 @@
               <span class="badge ${isBsReady ? 'badge-ok' : 'badge-warn'}">${isBsReady ? 'Siap Afresto Next' : 'Perlu Teks B/S'}</span>
             </div>
           </div>
-          <div class="q-stem">${escapeHtml(String(q.pertanyaan || '').replace(/<[^>]+>/g, ''))}</div>
+          <div class="q-stem">${renderRichTextWithSafeImages(q.pertanyaan || '')}</div>
+          ${stemImgsHtml}
           ${bodyHtml}
         </article>
       `;

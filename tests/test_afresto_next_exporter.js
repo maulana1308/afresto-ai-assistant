@@ -145,4 +145,47 @@ const nextRedCount = nextRedBoldParas.length;
 assert.strictEqual(nextRedCount, 50, `Total opsi kunci merah+bold untuk 40 PG + 5 PG Kompleks (2+2+3+2+1) harus tepat 50, terdeteksi ${nextRedCount}`);
 console.log(`✔ Test 5: Konversi 50 soal asli Afresto Legacy -> Afresto Next valid (${nextRedCount} opsi kunci #EE0000+bold, 5 tabel B/S)`);
 
+// 6. Uji ekspor gambar opsi (A-E) + multi-gambar stem + gambar dalam pernyataan B/S
+const richImgQuestions = [
+  {
+    id: 1,
+    tipe: 'PG',
+    pertanyaan: 'Perhatikan gambar molekul ini!',
+    gambar_base64: samplePng,
+    gambar_list: [samplePng, samplePng],
+    opsi: {
+      A: `<img src="${samplePng}" />`,
+      B: `Teks B <img src="${samplePng}" />`,
+      C: 'Opsi C teks',
+      D: `<img src="${samplePng}" />`,
+      E: 'Opsi E teks'
+    },
+    kunci: 'D'
+  },
+  {
+    id: 2,
+    tipe: 'BENAR_SALAH',
+    pertanyaan: 'Perhatikan data berikut!',
+    gambar_base64: samplePng,
+    opsi: {
+      A: `Rumus <img src="${samplePng}" /> adalah benar.`,
+      B: 'Pernyataan kedua salah.'
+    },
+    kunci: { A: 'Benar', B: 'Salah' }
+  }
+];
+const richOut = await buildAfrestoNextDocx(richImgQuestions);
+const richZip = unzipEntries(richOut.bytes);
+const richDoc = richZip['word/document.xml'].toString('utf8');
+const richRels = richZip['word/_rels/document.xml.rels'].toString('utf8');
+const mediaKeys = Object.keys(richZip).filter(k => k.startsWith('word/media/'));
+// 2 stem PG + 3 option PG + 1 stem B/S (_ocrExtracted undefined) + 1 inline cell B/S = 7 media images!
+assert.strictEqual(mediaKeys.length, 7, `Harus menanamkan seluruh 7 gambar (stem PG, opsi A/B/D, stem B/S, & rumus B/S), terdeteksi ${mediaKeys.length}`);
+const blipCount = (richDoc.match(/<a:blip r:embed="rIdImg\d+"/g) || []).length;
+assert.strictEqual(blipCount, 7);
+for (let k = 1; k <= 7; k++) {
+  assert.ok(richRels.includes(`Id="rIdImg${k}"`), `Relasi rIdImg${k} harus terdaftar di document.xml.rels`);
+}
+console.log('✔ Test 6: Ekspor gambar multi-stem, gambar di opsi A-E, dan gambar dalam tabel Benar/Salah valid 100%');
+
 console.log('\n⭐ SEMUA TEST EXPORTER AFRESTO NEXT 100% PASS!');
