@@ -49,10 +49,22 @@ try {
 
   const htmlRes = await fetch(`${baseUrl1}/`);
   assert.strictEqual(htmlRes.status, 200);
+  assert.strictEqual(htmlRes.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, max-age=0');
+  assert.strictEqual(htmlRes.headers.get('cdn-cache-control'), 'no-store');
   const htmlBody = await htmlRes.text();
   assert.ok(htmlBody.includes('Konverter Soal: Afresto Legacy ke Afresto Next'));
+  assert.ok(/scripts\/converter_bundle\.js\?v=[a-f0-9]{8}/.test(htmlBody), 'converter.html wajib menyertakan cache-busting ?v= untuk converter_bundle.js');
+  assert.ok(/scripts\/converter_app\.js\?v=[a-f0-9]{8}/.test(htmlBody), 'converter.html wajib menyertakan cache-busting ?v= untuk converter_app.js');
   assert.ok(!htmlBody.includes('SECRET_TEST_KEY_DO_NOT_LEAK'), 'API key server tidak boleh bocor ke HTML!');
-  console.log('✔ Test 2: Endpoint /api/health, static converter.html & security headers aman');
+
+  const unversionedJsRes = await fetch(`${baseUrl1}/scripts/converter_app.js`);
+  assert.strictEqual(unversionedJsRes.status, 200);
+  assert.strictEqual(unversionedJsRes.headers.get('cache-control'), 'no-store, no-cache, must-revalidate, max-age=0');
+
+  const versionedJsRes = await fetch(`${baseUrl1}/scripts/converter_app.js?v=deadbeef`);
+  assert.strictEqual(versionedJsRes.status, 200);
+  assert.strictEqual(versionedJsRes.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  console.log('✔ Test 2: Endpoint /api/health, static converter.html, cache-busting & anti-stale headers aman');
 
   const envRes = await fetch(`${baseUrl1}/deploy/vps-converter/.env`);
   assert.strictEqual(envRes.status, 404);

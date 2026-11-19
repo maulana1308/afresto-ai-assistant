@@ -356,13 +356,27 @@ export function createConverterServer(customConfig = {}) {
         return sendJson(res, 500, { error: 'Berkas antarmuka belum dibangun. Jalankan node scripts/build_converter_html.js.' });
       }
       const content = fs.readFileSync(target.file);
-      res.writeHead(200, {
+      const isHtmlEntry = route === '/converter.html';
+      let hasVersionQuery = false;
+      try {
+        hasVersionQuery = new URL(req.url || '/', 'http://localhost').searchParams.has('v');
+      } catch {}
+      const headers = {
         'Content-Type': target.mime,
-        'Cache-Control': route === '/converter.html' ? 'no-cache' : 'public, max-age=300',
+        'Cache-Control': (!isHtmlEntry && hasVersionQuery)
+          ? 'public, max-age=31536000, immutable'
+          : 'no-store, no-cache, must-revalidate, max-age=0',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'SAMEORIGIN',
         'Referrer-Policy': 'strict-origin-when-cross-origin'
-      });
+      };
+      if (isHtmlEntry || !hasVersionQuery) {
+        headers['Pragma'] = 'no-cache';
+        headers['Expires'] = '0';
+        headers['CDN-Cache-Control'] = 'no-store';
+        headers['Cloudflare-CDN-Cache-Control'] = 'no-store';
+      }
+      res.writeHead(200, headers);
       return res.end(content);
     }
 

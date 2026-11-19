@@ -5,6 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,9 +43,13 @@ export function buildStandaloneConverterAssets() {
     throw new Error('Marker <!-- AFRESTO_CORE_BUNDLE --> tidak ditemukan di converter.template.html');
   }
   const bodyEndIdx = template.lastIndexOf('</body>');
+  const bundleHash = crypto.createHash('sha256').update(bundleContent).digest('hex').slice(0, 8);
+  const appSrc = fs.readFileSync(path.join(__dirname, 'converter_app.js'), 'utf8');
+  const appHash = crypto.createHash('sha256').update(appSrc).digest('hex').slice(0, 8);
+
   const converterHtml =
     template.slice(0, markerIdx) +
-    '<script src="scripts/converter_bundle.js"></script>\n  <script src="scripts/converter_app.js"></script>\n' +
+    `<script src="scripts/converter_bundle.js?v=${bundleHash}"></script>\n  <script src="scripts/converter_app.js?v=${appHash}"></script>\n` +
     template.slice(bodyEndIdx);
 
   fs.writeFileSync(path.join(rootDir, 'converter.html'), converterHtml, 'utf8');
