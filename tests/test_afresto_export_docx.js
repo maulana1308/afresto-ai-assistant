@@ -421,4 +421,253 @@ assert.ok(vmlQs[0].opsi.A.includes('data:image/png;base64,EQ1'), 'Gambar rumus d
 assert.deepStrictEqual(vmlQs[0].kunci, { A: 'Benar', B: 'Benar' });
 console.log('✔ Test 13: Regresi VML o:relid, urutan atribut rels, multi-gambar stem, & gambar dalam tabel B/S 100% pass');
 
+// #14 Regresi naskah Ekonomi/Akuntansi: nested <mc:Fallback> + <w:txbxContent> + baris dobel verbatim (#1) + opsi kombinasi 1) dan 3) (#4) + tabel opsi 4-kolom (#16)
+const akuntansiXml = `<w:document><w:body>
+  ${makePlainP('1. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r><w:t>Bidang akuntansi yang mengkhususkan diri pada pemeriksaan catatan akuntansi secara bebas</w:t></w:r><mc:AlternateContent><mc:Choice><w:drawing><wp:inline><a:graphic/></wp:inline></w:drawing></mc:Choice><mc:Fallback><mc:AlternateContent><mc:Choice><w:t> </w:t></mc:Choice><mc:Fallback><w:t>DUP</w:t></mc:Fallback></mc:AlternateContent><w:t>Bidang akuntansi yang mengkhususkan diri pada pemeriksaan catatan akuntansi secara bebas</w:t></mc:Fallback></mc:AlternateContent></w:p>
+  ${makeNumP('sistem akuntansi\tD. akuntansi manajemen', '91')}
+  ${makeNumP('akuntansi keuangan\tE. akuntansi pemeriksaan', '91')}
+  ${makeNumP('akuntansi perpajakan', '91')}
+  ${makePlainP('KUNCI : E')}
+  ${makePlainP('Pembahasan')}
+  ${makePlainP('2. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r><w:txbxContent><w:p><w:r><w:t>Berikut adalah nama akun di catatan Barokah:</w:t></w:r></w:p><w:p><w:r><w:t>Yang termasuk akun riil adalah .....</w:t></w:r></w:p></w:txbxContent></w:r></w:p>
+  ${makeNumP('1) dan 3)\tD. 3) dan 5)', '92')}
+  ${makeNumP('2) dan 4)\tE. 4) dan 5)', '92')}
+  ${makeNumP('2) dan 5)', '92')}
+  ${makePlainP('KUNCI : C')}
+  ${makePlainP('Pembahasan')}
+  ${makePlainP('3. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  ${makePlainP('Besarnya modal awal Sat Set adalah ....')}
+  ${makeTbl([['A. Rp.', '120.200.000', 'D. Rp.', '267.300.000'], ['B. Rp.', '122.700.000', 'E. Rp.', '269.800.000'], ['C. Rp.', '125.200.000', '', '']])}
+  ${makePlainP('KUNCI : C')}
+  ${makePlainP('Pembahasan')}
+</w:body></w:document>`;
+const akuntansiConv = convertDocumentXmlToText(akuntansiXml, {}, { '91': { 0: 'upperLetter' }, '92': { 0: 'upperLetter' } });
+const akuntansiQs = parseQuestionsDirectly(akuntansiConv.text, {}, akuntansiConv.tables);
+assert.strictEqual(akuntansiQs.length, 3, 'Harus mendeteksi tepat 3 soal akuntansi tanpa terpecah oleh 1) dan 3)');
+assert.ok(!akuntansiQs[0].pertanyaan.includes('DUP'), 'Nested mc:Fallback tidak boleh bocor');
+assert.strictEqual(akuntansiQs[0].pertanyaan, 'Bidang akuntansi yang mengkhususkan diri pada pemeriksaan catatan akuntansi secara bebas', 'Teks dobel Soal #1 wajib terdeduplikasi');
+assert.strictEqual(akuntansiQs[1].opsi.A, '1) dan 3)', 'Opsi kombinasi angka 1) dan 3) tidak boleh menggeser nomor soal');
+assert.strictEqual(akuntansiQs[1].opsi.E, '4) dan 5)');
+assert.strictEqual(akuntansiQs[1].kunci, 'C');
+assert.deepStrictEqual(Object.keys(akuntansiQs[2].opsi), ['A', 'B', 'C', 'D', 'E']);
+assert.strictEqual(akuntansiQs[2].opsi.A, 'Rp. 120.200.000', 'Tabel opsi 4-kolom harus terekstrak rapi tanpa |');
+assert.strictEqual(akuntansiQs[2].opsi.C, 'Rp. 125.200.000');
+assert.strictEqual(akuntansiQs[2].opsi.E, 'Rp. 269.800.000');
+assert.ok(!akuntansiQs[2].pertanyaan.includes('<table'), 'Tabel opsi 4-kolom tidak boleh bocor ke pertanyaan');
+console.log('✔ Test 14: Regresi nested mc:Fallback, txbxContent, baris dobel #1, opsi 1) dan 3), & tabel opsi 4-kolom #16 100% pass');
+
+// #15 Regresi BENAR/SALAH Akuntansi: pernyataan menempel+duplikat (#36, #39), & pernyataan 1 gambar + pernyataan 2 multi-baris (#37)
+const bsAkuntansiText = `
+Tipe Soal: BENAR / SALAH Pernyataan:
+Tentukan pernyataan di bawah ini benar atau salah
+Pernyataan:Harta yang masa manfaatnya lebih dari setahun disebut harta tetap.Hasil Pernyataan : BENARPernyataan:Harta yang masa manfaatnya lebih dari setahun disebut harta tetap.Hasil Pernyataan : BENAR
+Pernyataan:Tagihan perusahaan terhadap pihak lain disebut utang.Hasil Pernyataan : SALAHPernyataan:Tagihan perusahaan terhadap pihak lain disebut utang.Hasil Pernyataan : SALAH
+Pembahasan
+
+Tipe Soal: BENAR / SALAH Pernyataan:
+Pernyataan:Akuntansi penting bagi masyarakat, pihak intern adalah investor.Hasil Pernyataan : SALAHPernyataan:Laporan keuangan harus relevan.Hasil Pernyataan : BENARPernyataan:Akuntansi penting bagi masyarakat, pihak intern adalah investor.Hasil Pernyataan : SALAHPernyataan:Laporan keuangan harus relevan.Hasil Pernyataan : BENARTentukan benar atau salah pernyataan di bawah ini!
+Pembahasan
+
+Tipe Soal: BENAR / SALAH Pernyataan:
+[GAMBAR_EMBED: rId37]
+Hasil Pernyataan : BENAR
+Pernyataan:
+Pernyataan:
+Pembelian perlengkapan sebesar Rp. 500.000, dibayar minggu depan.
+Hasil Pernyataan : SALAH
+Hasil Pernyataan : BENAR
+Pernyataan:
+Pernyataan:
+Pembelian perlengkapan sebesar Rp. 500.000, dibayar minggu depan.
+Hasil Pernyataan : SALAH
+Analisalah pernyataan tentang pencatatan transaksi di bawah ini, tentukan benar atau salah
+Pembahasan
+`;
+const bsAkQs = parseQuestionsDirectly(bsAkuntansiText, { rId37: 'data:image/png;base64,IMG37' }, []);
+assert.strictEqual(bsAkQs.length, 3);
+assert.strictEqual(bsAkQs[0].tipe, 'BENAR_SALAH');
+assert.deepStrictEqual(Object.keys(bsAkQs[0].opsi), ['A', 'B']);
+assert.strictEqual(bsAkQs[0].opsi.A, 'Harta yang masa manfaatnya lebih dari setahun disebut harta tetap.');
+assert.strictEqual(bsAkQs[0].opsi.B, 'Tagihan perusahaan terhadap pihak lain disebut utang.');
+assert.deepStrictEqual(bsAkQs[0].kunci, { A: 'Benar', B: 'Salah' });
+assert.strictEqual(bsAkQs[0].pertanyaan, 'Tentukan pernyataan di bawah ini benar atau salah');
+
+assert.strictEqual(bsAkQs[1].tipe, 'BENAR_SALAH');
+assert.deepStrictEqual(Object.keys(bsAkQs[1].opsi), ['A', 'B']);
+assert.deepStrictEqual(bsAkQs[1].kunci, { A: 'Salah', B: 'Benar' });
+assert.strictEqual(bsAkQs[1].pertanyaan, 'Tentukan benar atau salah pernyataan di bawah ini!');
+
+assert.strictEqual(bsAkQs[2].tipe, 'BENAR_SALAH');
+assert.deepStrictEqual(Object.keys(bsAkQs[2].opsi), ['A', 'B']);
+assert.ok(bsAkQs[2].opsi.A.includes('data:image/png;base64,IMG37'), 'Pernyataan 1 gambar harus masuk ke opsi.A');
+assert.strictEqual(bsAkQs[2].opsi.B, 'Pembelian perlengkapan sebesar Rp. 500.000, dibayar minggu depan.');
+assert.deepStrictEqual(bsAkQs[2].kunci, { A: 'Benar', B: 'Salah' });
+assert.strictEqual(bsAkQs[2].pertanyaan, 'Analisalah pernyataan tentang pencatatan transaksi di bawah ini, tentukan benar atau salah');
+assert.ok(!bsAkQs[2].gambar_base64, 'Gambar pernyataan A tidak boleh tampil dobel sebagai gambar stem');
+console.log('✔ Test 15: Regresi BENAR/SALAH akuntansi menempel+duplikat (#36, #39) & campuran gambar+teks (#37) 100% pass');
+
+// #16 Regresi grup gambar opsi (<wpg:wgp>), gambar tinggi 2x terbelah (B+C, D+E), & Pembahasan menempel pada paragraf B/S (#7, #8, #19, #21, #34, #40)
+function makeAnchorPic(rId, { posH = 931494, cx = 4600000, cy = 800000 } = {}) {
+  return `<w:drawing><wp:anchor><wp:positionH relativeFrom="page"><wp:posOffset>${posH}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><a:graphic><a:graphicData><pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="${rId}"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing>`;
+}
+function makeWpgGroup(posH, cx, cy, bodyXml) {
+  return `<w:drawing><wp:anchor><wp:positionH relativeFrom="page"><wp:posOffset>${posH}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><a:graphic><a:graphicData><wpg:wgp>${bodyXml}</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing>`;
+}
+function makePicNode(rId, x, y, cx, cy) {
+  return `<pic:pic><pic:nvPicPr/><pic:blipFill><a:blip r:embed="${rId}"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm></pic:spPr></pic:pic>`;
+}
+function makeWspLabel(text, x, y) {
+  return `<wps:wsp><wps:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="120000" cy="130000"/></a:xfrm></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent></wps:txbx></wps:wsp>`;
+}
+const ecoImgXml = `<w:document><w:body>
+  ${makePlainP('1. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r><w:t>Pencatatan bukti transaksi Salon Menik adalah .....</w:t></w:r><w:r>${makeWpgGroup(931494, 4800000, 4170000,
+    makePicNode('rId101', 0, 0, 4660000, 800000) +
+    makePicNode('rId102', 0, 800000, 4660000, 800000) +
+    makePicNode('rId103', 0, 1600000, 4660000, 800000) +
+    makePicNode('rId104', 0, 2400000, 4660000, 800000) +
+    makePicNode('rId105', 0, 3200000, 4660000, 800000)
+  )}</w:r></w:p>
+  ${makePlainP('A.')}${makePlainP('B.')}${makePlainP('C.')}${makePlainP('D.')}${makePlainP('E.')}
+  ${makePlainP('KUNCI : B')}
+  ${makePlainP('Pembahasan')}
+
+  ${makePlainP('2. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r>${makeAnchorPic('rId200', { posH: 814055, cx: 5356000, cy: 2569000 })}</w:r></w:p>
+  <w:p><w:r><w:t>A.</w:t></w:r><w:r>${makeWpgGroup(931494, 4800000, 4019000,
+    makePicNode('rId201', 0, 0, 4610000, 809000) +
+    makePicNode('rId202', 0, 809000, 4800000, 1619000) +
+    makePicNode('rId203', 0, 2428000, 4714000, 790000) +
+    makePicNode('rId204', 0, 3218000, 4667000, 800000)
+  )}</w:r></w:p>
+  ${makePlainP('B.')}${makePlainP('C.')}${makePlainP('D.')}${makePlainP('E.')}
+  ${makePlainP('KUNCI : C')}
+  ${makePlainP('Pembahasan')}
+
+  ${makePlainP('3. Tipe Soal: PILIHAN GANDA')}
+  <w:p><w:r><w:t>Pertanyaan:</w:t></w:r><w:r>${makeWpgGroup(931494, 2828000, 3727000,
+    makePicNode('rId301', 25000, 0, 2690000, 889000) +
+    makePicNode('rId302', 0, 901000, 2828000, 1905000) +
+    makePicNode('rId303', 25000, 2832000, 2710000, 894000)
+  )}</w:r></w:p>
+  <w:p><w:r>${makeAnchorPic('rId300', { posH: 785928, cx: 5078000, cy: 1123000 })}</w:r></w:p>
+  ${makePlainP('A.')}${makePlainP('B.')}${makePlainP('C.')}${makePlainP('D.')}
+  <w:p><w:r><w:t>E.</w:t></w:r><w:r>${makeAnchorPic('rId304', { posH: 959003, cx: 2915000, cy: 852000 })}</w:r></w:p>
+  ${makePlainP('KUNCI : B')}
+  ${makePlainP('Pembahasan')}
+
+  ${makePlainP('4. Tipe Soal: PILIHAN GANDA')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r><w:t>Dibayar beban listrik sebesar Rp500.000,00. Jurnalnya ialah .... A.</w:t></w:r><w:r>${makeWpgGroup(931494, 3686000, 1463000,
+    makePicNode('rId401', 0, 0, 3138000, 233000) +
+    makePicNode('rId402', 0, 233000, 3184000, 295000) +
+    makePicNode('rId403', 0, 528000, 3133000, 285000) +
+    makePicNode('rId404', 0, 813000, 3351000, 304000) +
+    makePicNode('rId405', 0, 1117000, 3686000, 342000)
+  )}</w:r></w:p>
+  ${makePlainP('B.')}${makePlainP('C.')}${makePlainP('D.')}${makePlainP('E.')}
+  ${makePlainP('KUNCI : D')}
+  ${makePlainP('Pembahasan')}
+
+  ${makePlainP('5. Tipe Soal: PILIHAN GANDA KOMPLEKS')}
+  ${makePlainP('Pertanyaan:')}
+  <w:p><w:r>${makeWpgGroup(730872, 6374000, 5083000,
+    makePicNode('rId500', 0, 0, 6373000, 1558000) +
+    makeWspLabel('A.', 10121, 1578013) +
+    makePicNode('rId501', 200621, 1558836, 4657000, 685800) +
+    makeWspLabel('B.', 10121, 2263813) +
+    makePicNode('rId502', 200621, 2244636, 4717000, 685800) +
+    makeWspLabel('C.', 10121, 2949613) +
+    makePicNode('rId503', 200621, 2930436, 4848000, 700828) +
+    makeWspLabel('D.', 10121, 3683038) +
+    makePicNode('rId504', 200621, 3663861, 4829000, 1419225) +
+    makeWspLabel('E.', 10121, 4397413)
+  )}</w:r></w:p>
+  ${makePlainP('KUNCI : A , D , E')}
+  ${makePlainP('Pembahasan')}
+
+  ${makePlainP('6. Tipe Soal: BENAR / SALAH Pernyataan:')}
+  ${makePlainP('Analisalah macam-macam akun di bawah ini, tentukan benar atau salah')}
+  <w:p><w:r><w:t>Pembahasan</w:t></w:r><w:r>${makeWpgGroup(1417320, 4800000, 2700000,
+    makeWspLabel('Hasil Pernyataan : SALAH', 1000, 10000) +
+    makePicNode('rId601', 38100, 175260, 1838325, 990600) +
+    makeWspLabel('Pernyataan:', 1000, 1200000) +
+    makeWspLabel('Hasil Pernyataan : BENAR', 1000, 1400000) +
+    makePicNode('rId602', 38100, 1672589, 2324100, 1009650) +
+    makeWspLabel('Pernyataan:', 1000, 2600000)
+  )}</w:r></w:p>
+</w:body></w:document>`;
+const ecoImgMap = {
+  rId101: 'data:image/png;base64,OPT101', rId102: 'data:image/png;base64,OPT102', rId103: 'data:image/png;base64,OPT103',
+  rId104: 'data:image/png;base64,OPT104', rId105: 'data:image/png;base64,OPT105',
+  rId200: 'data:image/png;base64,STEM200', rId201: 'data:image/png;base64,OPT201', rId202: 'data:image/png;base64,OPT202DBL',
+  rId203: 'data:image/png;base64,OPT203', rId204: 'data:image/png;base64,OPT204',
+  rId300: 'data:image/png;base64,STEM300', rId301: 'data:image/png;base64,OPT301', rId302: 'data:image/png;base64,OPT302DBL',
+  rId303: 'data:image/png;base64,OPT303', rId304: 'data:image/png;base64,OPT304E',
+  rId401: 'data:image/png;base64,OPT401', rId402: 'data:image/png;base64,OPT402', rId403: 'data:image/png;base64,OPT403',
+  rId404: 'data:image/png;base64,OPT404', rId405: 'data:image/png;base64,OPT405',
+  rId500: 'data:image/png;base64,STEM500', rId501: 'data:image/png;base64,OPT501', rId502: 'data:image/png;base64,OPT502',
+  rId503: 'data:image/png;base64,OPT503', rId504: 'data:image/png;base64,OPT504DBL',
+  rId601: 'data:image/png;base64,BS601', rId602: 'data:image/png;base64,BS602'
+};
+const ecoImgConv = convertDocumentXmlToText(ecoImgXml, ecoImgMap, {});
+const ecoImgQs = parseQuestionsDirectly(ecoImgConv.text, ecoImgMap, ecoImgConv.tables, ecoImgConv.imageMeta);
+assert.strictEqual(ecoImgQs.length, 6);
+
+// Assert #1 (Q#7): 5 grouped option images moved from stem to opsi A-E
+assert.ok(!ecoImgQs[0].gambar_base64, '5 gambar opsi tidak boleh tertinggal sebagai gambar stem');
+for (let k = 0; k < 5; k++) {
+  const L = String.fromCharCode(65 + k);
+  assert.ok(ecoImgQs[0].opsi[L].includes(`OPT10${k + 1}`), `Opsi ${L} harus berisi OPT10${k + 1}`);
+}
+
+// Assert #2 (Q#8): wide stem intact + 4 bunched pics with 2x OPT202 split into B & C
+assert.ok(ecoImgQs[1].gambar_base64.includes('STEM200'));
+assert.ok(ecoImgQs[1].opsi.A.includes('OPT201'));
+assert.ok(ecoImgQs[1].opsi.B.includes('OPT202DBL'));
+assert.ok(ecoImgQs[1].opsi.C.includes('OPT202DBL'));
+assert.ok(ecoImgQs[1].opsi.D.includes('OPT203'));
+assert.ok(ecoImgQs[1].opsi.E.includes('OPT204'));
+assert.deepStrictEqual(ecoImgQs[1]._pendingImgSplits, [{ optKeyTop: 'B', optKeyBottom: 'C', rId: 'rId202' }]);
+
+// Assert #3 (Q#19): indented group redistributed to A-D (OPT302DBL split into B+C) & E stays OPT304E
+assert.ok(ecoImgQs[2].gambar_base64.includes('STEM300'));
+assert.ok(ecoImgQs[2].opsi.A.includes('OPT301'));
+assert.ok(ecoImgQs[2].opsi.B.includes('OPT302DBL'));
+assert.ok(ecoImgQs[2].opsi.C.includes('OPT302DBL'));
+assert.ok(ecoImgQs[2].opsi.D.includes('OPT303'));
+assert.ok(ecoImgQs[2].opsi.E.includes('OPT304E'));
+assert.deepStrictEqual(ecoImgQs[2]._pendingImgSplits, [{ optKeyTop: 'B', optKeyBottom: 'C', rId: 'rId302' }]);
+
+// Assert #4 (Q#21): inline trailing A. + 5 bunched pics distributed to A-E
+for (let k = 0; k < 5; k++) {
+  const L = String.fromCharCode(65 + k);
+  assert.ok(ecoImgQs[3].opsi[L].includes(`OPT40${k + 1}`), `Q#21 opsi ${L} harus terisi OPT40${k + 1}`);
+}
+
+// Assert #5 (Q#34): y-sorted <wpg:wgp> puts STEM500 in stem, OPT501..503 in A-C, OPT504DBL split into D & E
+assert.strictEqual(ecoImgQs[4].tipe, 'PG_KOMPLEKS');
+assert.ok(ecoImgQs[4].gambar_base64.includes('STEM500'));
+assert.ok(ecoImgQs[4].opsi.A.includes('OPT501'));
+assert.ok(ecoImgQs[4].opsi.B.includes('OPT502'));
+assert.ok(ecoImgQs[4].opsi.C.includes('OPT503'));
+assert.ok(ecoImgQs[4].opsi.D.includes('OPT504DBL'));
+assert.ok(ecoImgQs[4].opsi.E.includes('OPT504DBL'));
+assert.deepStrictEqual(ecoImgQs[4]._pendingImgSplits, [{ optKeyTop: 'D', optKeyBottom: 'E', rId: 'rId504' }]);
+
+// Assert #6 (Q#40): Pembahasan anchored on same <w:p> as <w:txbxContent> does not swallow B/S images
+assert.strictEqual(ecoImgQs[5].tipe, 'BENAR_SALAH');
+assert.ok(!ecoImgQs[5].gambar_base64, 'Gambar pernyataan B/S tidak boleh tertinggal di stem');
+assert.ok(ecoImgQs[5].opsi.A.includes('BS601'));
+assert.ok(ecoImgQs[5].opsi.B.includes('BS602'));
+assert.deepStrictEqual(ecoImgQs[5].kunci, { A: 'Salah', B: 'Benar' });
+console.log('✔ Test 16: Regresi grup <wpg:wgp> opsi bergambar, pemecahan gambar 2x, & B/S dengan Pembahasan menempel 100% pass');
+
 console.log('\n⭐ SEMUA TEST AFRESTO EXPORT FORMAT 100% PASS!');

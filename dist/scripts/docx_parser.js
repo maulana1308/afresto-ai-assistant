@@ -288,6 +288,73 @@ function getMimeType(filename) {
   return 'image/png';
 }
 
+async function splitDataUrlVertically(dataUrl) {
+  if (!dataUrl || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = dataUrl;
+    });
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    if (!w || !h || h < 20) return null;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h).data;
+
+    const yMin = Math.floor(h * 0.40);
+    const yMax = Math.floor(h * 0.60);
+    const rowCounts = [];
+    let minCount = Infinity;
+    for (let y = yMin; y <= yMax; y++) {
+      let nonWhite = 0;
+      const rowOffset = y * w * 4;
+      for (let x = 0; x < w; x++) {
+        const idx = rowOffset + x * 4;
+        const a = data[idx + 3];
+        if (a > 20 && (data[idx] < 240 || data[idx + 1] < 240 || data[idx + 2] < 240)) {
+          nonWhite++;
+        }
+      }
+      rowCounts.push({ y, nonWhite });
+      if (nonWhite < minCount) minCount = nonWhite;
+    }
+
+    const bestRows = rowCounts.filter(r => r.nonWhite <= minCount + 2).map(r => r.y);
+    const splitY = bestRows.length > 0 && bestRows.length < rowCounts.length
+      ? bestRows[Math.floor(bestRows.length / 2)]
+      : Math.round(h / 2);
+
+    if (splitY <= 4 || splitY >= h - 4) return null;
+
+    const cTop = document.createElement('canvas');
+    cTop.width = w;
+    cTop.height = splitY;
+    cTop.getContext('2d').drawImage(img, 0, 0, w, splitY, 0, 0, w, splitY);
+
+    const cBot = document.createElement('canvas');
+    cBot.width = w;
+    cBot.height = h - splitY;
+    cBot.getContext('2d').drawImage(img, 0, splitY, w, h - splitY, 0, 0, w, h - splitY);
+
+    return {
+      topUrl: cTop.toDataURL('image/png'),
+      bottomUrl: cBot.toDataURL('image/png')
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Mengekstrak struktur teks, tabel, dan gambar dari dokumen Word (.docx)
  * @param {ArrayBuffer} arrayBuffer - Buffer biner berkas .docx
@@ -350,7 +417,26 @@ export async function parseDocx(arrayBuffer) {
   const docXml = textDecoder.decode(docBytes);
 
   const parsedDoc = convertDocumentXmlToText(docXml, imageRIdMap, numberingMap);
-  const directQuestions = parseQuestionsDirectly(parsedDoc.text, imageRIdMap, parsedDoc.tables);
+  const directQuestions = parseQuestionsDirectly(parsedDoc.text, imageRIdMap, parsedDoc.tables, parsedDoc.imageMeta);
+
+  for (const q of directQuestions) {
+    if (Array.isArray(q._pendingImgSplits) && q._pendingImgSplits.length > 0) {
+      for (const splitInfo of q._pendingImgSplits) {
+        const { optKeyTop, optKeyBottom, rId } = splitInfo;
+        const srcUrl = imageRIdMap[rId];
+        if (!srcUrl || !q.opsi) continue;
+        const splitRes = await splitDataUrlVertically(srcUrl);
+        if (splitRes) {
+          q.opsi[optKeyTop] = `<img src="${splitRes.topUrl}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+          q.opsi[optKeyBottom] = `<img src="${splitRes.bottomUrl}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+        } else {
+          q.opsi[optKeyTop] = `<img src="${srcUrl}" data-split-half="top" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+          q.opsi[optKeyBottom] = `<img src="${srcUrl}" data-split-half="bottom" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+        }
+      }
+      delete q._pendingImgSplits;
+    }
+  }
 
   return {
     success: true,
@@ -408,7 +494,203 @@ export function parseNumberingXml(numberingXml) {
 
 function stripAlternateFallbacks(xml) {
   if (!xml) return '';
+  // Depth-balanced stripper agar nested <mc:AlternateContent><mc:Fallback> tidak meninggalkan sisa VML duplikat
+  const tagRegex = /<(\/?)mc:Fallback\b([^>]*)>/gi;
+  let depth = 0;
+  let out = '';
+  let lastKeep = 0;
+  let m;
+  while ((m = tagRegex.exec(xml)) !== null) {
+    const isClose = m[1] === '/';
+    const isSelfClose = !isClose && /\/\s*$/.test(m[2] || '');
+    if (isSelfClose) {
+      if (depth === 0) {
+        out += xml.slice(lastKeep, m.index);
+        lastKeep = tagRegex.lastIndex;
+      }
+      continue;
+    }
+    if (!isClose) {
+      if (depth === 0) {
+        out += xml.slice(lastKeep, m.index);
+      }
+      depth++;
+    } else if (depth > 0) {
+      depth--;
+      if (depth === 0) {
+        lastKeep = tagRegex.lastIndex;
+      }
+    }
+  }
+  if (depth === 0) {
+    out += xml.slice(lastKeep);
+    return out;
+  }
   return xml.replace(/<mc:Fallback\b[^>]*>[\s\S]*?<\/mc:Fallback>/gi, '');
+}
+
+/**
+ * Mengurai <w:txbxContent> di dalam <w:p> menjadi blok-blok <w:p>/<w:tbl> terpisah
+ * agar teks dalam textbox hasil konversi PDF->Word tidak tergencet menjadi satu baris panjang.
+ */
+function unwrapTextboxBlocks(pXml) {
+  if (!/<w:txbxContent\b/i.test(pXml)) {
+    return [{ type: 'p', xml: pXml }];
+  }
+
+  // Tangani grup gambar + textbox berlabel A.–E. (misal Soal #34) agar urutan y vertikal gambar sejajar dengan A.–E.
+  if (/<wpg:wgp\b/i.test(pXml) && /<pic:pic\b/i.test(pXml)) {
+    const labelItems = [];
+    const wspRegex = /<wps:wsp\b[\s\S]*?<\/wps:wsp>/gi;
+    let wm;
+    while ((wm = wspRegex.exec(pXml)) !== null) {
+      const wspXml = wm[0];
+      if (!/<w:txbxContent\b/i.test(wspXml)) continue;
+      const txbxInnerM = wspXml.match(/<w:txbxContent\b[^>]*>([\s\S]*?)<\/w:txbxContent>/i);
+      if (!txbxInnerM) continue;
+      const strippedTxt = (txbxInnerM[1].match(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/gi) || [])
+        .map(t => t.replace(/<[^>]+>/g, ''))
+        .join('')
+        .trim();
+      const offM = wspXml.match(/<a:off\b[^>]*\by="(-?\d+)"/i);
+      const y = offM ? parseInt(offM[1], 10) : 0;
+      const innerBlocks = [];
+      for (const b of extractTopLevelWordBlocks(txbxInnerM[1])) {
+        if (b.type === 'tbl') {
+          for (const subTbl of flattenNestedTablesIfNeeded(b.xml)) {
+            innerBlocks.push({ type: 'tbl', xml: subTbl });
+          }
+        } else {
+          innerBlocks.push(...unwrapTextboxBlocks(b.xml));
+        }
+      }
+      labelItems.push({ y, kind: 'label', strippedTxt, blocks: innerBlocks });
+    }
+    const optLabelCount = labelItems.filter(it => /^[A-E][\.\)]$/i.test(it.strippedTxt)).length;
+    if (optLabelCount >= 3) {
+      const picItems = [];
+      const picRegex = /<pic:pic\b[\s\S]*?<\/pic:pic>/gi;
+      let pm;
+      while ((pm = picRegex.exec(pXml)) !== null) {
+        const picXml = pm[0];
+        const offM = picXml.match(/<a:off\b[^>]*\by="(-?\d+)"/i);
+        const y = offM ? parseInt(offM[1], 10) : 0;
+        picItems.push({ y, kind: 'pic', blocks: [{ type: 'p', xml: `<w:p><w:r>${picXml}</w:r></w:p>` }] });
+      }
+      const allItems = [...labelItems, ...picItems].sort((a, b) => {
+        if (Math.abs(a.y - b.y) <= 60000 && a.kind !== b.kind) {
+          return a.kind === 'label' ? -1 : 1;
+        }
+        return a.y - b.y;
+      });
+      const outerNoDrawing = pXml.replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/gi, '');
+      const hasOuterTxt = /<w:t\b[^>]*>[^<]+<\/w:t>/i.test(outerNoDrawing);
+      const ordered = allItems.flatMap(it => it.blocks);
+      return hasOuterTxt ? [{ type: 'p', xml: outerNoDrawing }, ...ordered] : ordered;
+    }
+  }
+
+  const innerBlocks = [];
+  const txbxRegex = /<w:txbxContent\b[^>]*>([\s\S]*?)<\/w:txbxContent>/gi;
+  let tm;
+  while ((tm = txbxRegex.exec(pXml)) !== null) {
+    const innerXml = tm[1];
+    if (!innerXml || innerXml.length >= pXml.length) continue;
+    for (const b of extractTopLevelWordBlocks(innerXml)) {
+      if (b.type === 'tbl') {
+        for (const subTbl of flattenNestedTablesIfNeeded(b.xml)) {
+          innerBlocks.push({ type: 'tbl', xml: subTbl });
+        }
+      } else {
+        innerBlocks.push(...unwrapTextboxBlocks(b.xml));
+      }
+    }
+  }
+  const outerStripped = pXml.replace(/<w:txbxContent\b[^>]*>[\s\S]*?<\/w:txbxContent>/gi, '');
+  const hasOuterContent = /<w:t\b[^>]*>[^<]+<\/w:t>|<a:blip\b|<v:imagedata\b|<m:oMath\b/i.test(outerStripped);
+  if (innerBlocks.length > 0 && hasOuterContent) {
+    const outerPlain = outerStripped.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (/^(?:Pembahasan|KUNCI\b)/i.test(outerPlain)) {
+      const imgTags = [];
+      const imgTagRe = /(?:<a:blip\b[^>]*\/?>|<v:imagedata\b[^>]*\/?>)/gi;
+      let im;
+      while ((im = imgTagRe.exec(outerStripped)) !== null) {
+        imgTags.push(im[0]);
+      }
+      const outerTextOnly = outerStripped
+        .replace(/<w:drawing\b[\s\S]*?<\/w:drawing>/gi, '')
+        .replace(/<w:pict\b[\s\S]*?<\/w:pict>/gi, '')
+        .replace(/<mc:AlternateContent\b[\s\S]*?<\/mc:AlternateContent>/gi, '');
+      return [
+        ...(imgTags.length ? [{ type: 'p', xml: `<w:p><w:r>${imgTags.join('')}</w:r></w:p>` }] : []),
+        ...innerBlocks,
+        { type: 'p', xml: outerTextOnly }
+      ];
+    }
+  }
+  return hasOuterContent ? [{ type: 'p', xml: outerStripped }, ...innerBlocks] : innerBlocks;
+}
+
+function extractImageGeometryMap(cleanedXml) {
+  const imageMeta = {};
+  if (!cleanedXml) return imageMeta;
+  const drawingRegex = /<w:drawing\b[\s\S]*?<\/w:drawing>/gi;
+  let dm;
+  while ((dm = drawingRegex.exec(cleanedXml)) !== null) {
+    const drawingXml = dm[0];
+    const inGroup = /<wpg:wgp\b/i.test(drawingXml);
+    const posHM = drawingXml.match(/<wp:positionH\b[^>]*>[\s\S]*?<wp:posOffset>(-?\d+)<\/wp:posOffset>/i);
+    const posVM = drawingXml.match(/<wp:positionV\b[^>]*>[\s\S]*?<wp:posOffset>(-?\d+)<\/wp:posOffset>/i);
+    const wpExtM = drawingXml.match(/<wp:extent\b[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/i);
+    const posH = posHM ? parseInt(posHM[1], 10) : null;
+    const posV = posVM ? parseInt(posVM[1], 10) : null;
+
+    const picRegex = /<pic:pic\b[\s\S]*?<\/pic:pic>/gi;
+    let pm;
+    let foundPic = false;
+    while ((pm = picRegex.exec(drawingXml)) !== null) {
+      foundPic = true;
+      const picXml = pm[0];
+      const blipM = picXml.match(/<a:blip\b[^>]*?(?:r:embed|r:link)="([^"]+)"/i);
+      if (!blipM) continue;
+      const rId = blipM[1];
+      const offM = picXml.match(/<a:off\b[^>]*\bx="(-?\d+)"[^>]*\by="(-?\d+)"/i);
+      const extM = picXml.match(/<a:ext\b[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/i);
+      const cx = extM ? parseInt(extM[1], 10) : (wpExtM ? parseInt(wpExtM[1], 10) : 0);
+      const cy = extM ? parseInt(extM[2], 10) : (wpExtM ? parseInt(wpExtM[2], 10) : 0);
+      imageMeta[rId] = {
+        cx,
+        cy,
+        x: offM ? parseInt(offM[1], 10) : 0,
+        y: offM ? parseInt(offM[2], 10) : 0,
+        posH,
+        posV,
+        inGroup
+      };
+    }
+    if (!foundPic) {
+      const blipM = drawingXml.match(/<a:blip\b[^>]*?(?:r:embed|r:link)="([^"]+)"/i);
+      if (blipM) {
+        imageMeta[blipM[1]] = {
+          cx: wpExtM ? parseInt(wpExtM[1], 10) : 0,
+          cy: wpExtM ? parseInt(wpExtM[2], 10) : 0,
+          x: 0,
+          y: 0,
+          posH,
+          posV,
+          inGroup
+        };
+      }
+    }
+  }
+  return imageMeta;
+}
+
+function deduplicateDoubledLine(text) {
+  if (!text || text.length < 50) return text;
+  const trimmed = text.trim();
+  const m = trimmed.match(/^(.{25,}?)\s+\1$/);
+  return m ? m[1].trim() : text;
 }
 
 /**
@@ -514,11 +796,12 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
   const fullTextLines = [];
 
   const cleanedXml = stripAlternateFallbacks(xml);
+  const imageMeta = extractImageGeometryMap(cleanedXml);
   const bodyMatch = cleanedXml.match(/<w:body\b[^>]*>([\s\S]*?)<\/w:body>/i);
   const bodyXml = bodyMatch ? bodyMatch[1] : cleanedXml;
   const topBlocks = extractTopLevelWordBlocks(bodyXml);
 
-  // Uraikan nested <w:tbl> (bila ada layout wrapper table) secara berurutan
+  // Uraikan nested <w:tbl> dan textbox <w:txbxContent> secara berurutan
   const blocks = [];
   for (const blk of topBlocks) {
     if (blk.type === 'tbl') {
@@ -526,7 +809,7 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
         blocks.push({ type: 'tbl', xml: subTbl });
       }
     } else {
-      blocks.push(blk);
+      blocks.push(...unwrapTextboxBlocks(blk.xml));
     }
   }
 
@@ -612,7 +895,7 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
     } 
     // Jika blok adalah Paragraf: <w:p>
     else if (blockType === 'p') {
-      let pText = extractTextRuns(blockXml).trim();
+      let pText = deduplicateDoubledLine(extractTextRuns(blockXml).trim());
 
       const isHeadingOrStimulus = isRealHeadingOrStimulus(pText);
       const isExplicitTypeHeader = /^(?:\*\*)?(?:No\.?\s*)?(?:\d{1,3}[\.\:\)]\s*)?Tipe\s*(?:Soal)?\s*[:=]/i.test(pText);
@@ -620,9 +903,10 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
         listOptCounter = 0;
       }
 
-      // Selaraskan listQCounter & listOptCounter dengan penomoran manual jika ada
-      const manualQMatch = pText.match(/^(?:\*\*)?(?:No\.?\s*)?(\d{1,3})[\.\)]/i);
-      if (manualQMatch && !pText.match(/^(?:\*\*)?[A-Ea-e][\.\)]/i)) {
+      // Selaraskan listQCounter & listOptCounter dengan penomoran manual jika ada (jangan salah tangkap opsi '1) dan 3)')
+      const manualQMatch = !blockXml.includes('<w:numPr') ? pText.match(/^(?:\*\*)?(?:No\.?\s*)?(\d{1,3})[\.\)]/i) : null;
+      const isNumberedCombinationOption = /^(?:\*\*)?\d{1,2}\)\s*(?:,|dan\b)/i.test(pText);
+      if (manualQMatch && !isNumberedCombinationOption && !pText.match(/^(?:\*\*)?[A-Ea-e][\.\)]/i)) {
         const parsedManualNum = parseInt(manualQMatch[1], 10);
         if (parsedManualNum > listQCounter) {
           listQCounter = parsedManualNum;
@@ -702,7 +986,8 @@ export function convertDocumentXmlToText(xml, imageRIdMap = {}, numberingMap = {
   return {
     text: rawText,
     paragraphs,
-    tables
+    tables,
+    imageMeta
   };
 }
 
@@ -949,6 +1234,46 @@ export function extractOptionsFromTable(tblData) {
     }
     return opsi;
   }
+
+  // Fallback 2: Tabel opsi horizontal / 2-kolom berpasangan (misal: | A. Rp. | 120.200.000 | D. Rp. | 267.300.000 |)
+  const gridOpsi = {};
+  let gridDetectedKey = '';
+  for (const row of tblData) {
+    if (!Array.isArray(row)) continue;
+    let activeLetter = null;
+    for (let c = 0; c < row.length; c++) {
+      const rawCell = String(row[c] || '').trim();
+      if (!rawCell) continue;
+      const cleanCell = rawCell.replace(/\*\*/g, '').replace(/(?<!\*)\*(?!\*)/g, '').trim();
+      const optStart = cleanCell.match(/^([A-E])[\.\:\)](?:\s+(.*)|\s*)$/i);
+      if (optStart) {
+        activeLetter = optStart[1].toUpperCase();
+        const rest = (optStart[2] || '').trim();
+        gridOpsi[activeLetter] = rest;
+        if (rawCell.includes('**') && !gridDetectedKey) {
+          gridDetectedKey = activeLetter;
+        }
+      } else if (activeLetter) {
+        gridOpsi[activeLetter] = gridOpsi[activeLetter]
+          ? `${gridOpsi[activeLetter]} ${cleanCell}`
+          : cleanCell;
+        if (rawCell.includes('**') && !gridDetectedKey) {
+          gridDetectedKey = activeLetter;
+        }
+      }
+    }
+  }
+  if (['A', 'B', 'C', 'D'].every(l => gridOpsi[l] !== undefined && gridOpsi[l].trim() !== '')) {
+    if (gridDetectedKey) {
+      Object.defineProperty(gridOpsi, '__detectedKey', {
+        value: gridDetectedKey,
+        enumerable: false,
+        writable: true
+      });
+    }
+    return gridOpsi;
+  }
+
   return null;
 }
 
@@ -1093,19 +1418,37 @@ function normalizeExtractedKey(raw) {
   return cleaned;
 }
 
-function parseAfrestoBsStatement(raw) {
+function extractAllAfrestoBsStatements(raw) {
   const plain = stripMarkdownMarks(String(raw || '')).replace(/^\|+|\|+$/g, '').replace(/\s+/g, ' ').trim();
-  if (!plain) return null;
-  const m = plain.match(/^(?:Pernyataan\s*[:=]\s*)?([\s\S]+?)\s*Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)(.*)$/i);
-  if (!m) return null;
-  const trailing = (m[3] || '').trim();
-  if (trailing && trailing.replace(/<img\b[^>]*>/gi, '').trim() !== '') return null;
-  const teks = (m[1] + (trailing ? ' ' + trailing : '')).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!teks) return null;
-  return {
-    teks,
-    nilai: /^(?:benar|true)$/i.test(m[2]) ? 'Benar' : 'Salah'
-  };
+  if (!plain || !/Hasil\s+Pernyataan\s*[:=]\s*(?:Benar|Salah|True|False)/i.test(plain)) {
+    return { items: [], trailingPrompt: '' };
+  }
+
+  const items = [];
+  const segRegex = /(?:Pernyataan\s*[:=]\s*)?([\s\S]+?)\s*Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)((?:\s*<img\b[^>]*>)*)/gi;
+  let lastEnd = 0;
+  let m;
+  while ((m = segRegex.exec(plain)) !== null) {
+    const trailingImgs = (m[3] || '').trim();
+    const cleanedBody = m[1].replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+    const teks = (cleanedBody + (trailingImgs ? ' ' + trailingImgs : '')).trim();
+    if (teks && !/^Hasil\s+Pernyataan/i.test(teks)) {
+      items.push({
+        teks,
+        nilai: /^(?:benar|true)$/i.test(m[2]) ? 'Benar' : 'Salah'
+      });
+    }
+    lastEnd = segRegex.lastIndex;
+  }
+
+  const trailingPrompt = items.length > 0 ? plain.slice(lastEnd).replace(/\|/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  return { items, trailingPrompt };
+}
+
+function parseAfrestoBsStatement(raw) {
+  const { items, trailingPrompt } = extractAllAfrestoBsStatements(raw);
+  if (items.length === 1 && !trailingPrompt) return items[0];
+  return null;
 }
 
 function parseBsPembahasanKeys(text) {
@@ -1123,7 +1466,7 @@ function parseBsPembahasanKeys(text) {
   return keys;
 }
 
-export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
+export function parseQuestionsDirectly(rawText, docxImages = {}, tables = [], imageMeta = {}) {
   if (!rawText && (!tables || tables.length === 0)) return [];
 
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
@@ -1250,6 +1593,17 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     qObj.matchingMdBuffer = [];
   }
 
+  function pushUniqueBsItem(qObj, item) {
+    if (!qObj || !item || !item.teks) return;
+    if (!qObj.bsItems) qObj.bsItems = [];
+    const normTeks = item.teks.toLowerCase().replace(/\s+/g, ' ').trim();
+    const key = `${normTeks}|${item.nilai}`;
+    if (!qObj._bsSeenSet) qObj._bsSeenSet = new Set();
+    if (qObj._bsSeenSet.has(key)) return;
+    qObj._bsSeenSet.add(key);
+    qObj.bsItems.push({ teks: item.teks.trim(), nilai: item.nilai });
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const plainLine = stripMarkdownMarks(line);
@@ -1263,7 +1617,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     if (!keyRegex.test(plainLine) && /^(?:DAFTAR\s+)?(?:KUNCI(?:\s+JAWABAN)?|ANSWER\s+KEYS?|ANSWERS?|KEYS?|CORRECT\s+ANSWERS?|SOLUTIONS?|مفتاح\s+الإجابة|解答)(?:\s+(?:DAN\s+PEMBAHASAN|SOAL|PAS|PTS|PAT|US|[A-Za-z0-9\s]+))?\s*:?\s*$/i.test(plainLine)) {
       if (currentQ) {
         flushMatchingMarkdownBuffer(currentQ);
-        questions.push(finalizeQuestion(currentQ, docxImages, tables));
+        questions.push(finalizeQuestion(currentQ, docxImages, tables, imageMeta));
         currentQ = null;
       }
       break; // Hentikan loop butir soal, sisanya adalah daftar kunci jawaban
@@ -1289,7 +1643,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       if (!currentQ || currentHasBody) {
         if (currentQ) {
           flushMatchingMarkdownBuffer(currentQ);
-          questions.push(finalizeQuestion(currentQ, docxImages, tables));
+          questions.push(finalizeQuestion(currentQ, docxImages, tables, imageMeta));
         }
         currentQ = {
           id: parsedExplicitId || (questions.length + 1),
@@ -1319,7 +1673,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     if (inOptions && canSplitOnStimulus && (isHeadingOrStimulus || isIngredientsOrSteps)) {
       if (currentQ) {
         flushMatchingMarkdownBuffer(currentQ);
-        questions.push(finalizeQuestion(currentQ, docxImages, tables));
+        questions.push(finalizeQuestion(currentQ, docxImages, tables, imageMeta));
         currentQ = null;
       }
       inOptions = false;
@@ -1361,12 +1715,14 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         if (currentQ.explicitTipe === 'BENAR_SALAH') {
           const parsedBsRows = [];
           for (const row of tables[tblIdx]) {
-            const bsItem = parseAfrestoBsStatement(Array.isArray(row) ? row.join(' ') : String(row || ''));
-            if (bsItem) parsedBsRows.push(bsItem);
+            const { items: rowItems, trailingPrompt } = extractAllAfrestoBsStatements(Array.isArray(row) ? row.join(' ') : String(row || ''));
+            if (rowItems.length > 0) {
+              parsedBsRows.push(...rowItems);
+              if (trailingPrompt) currentQ.pertanyaanLines.push(trailingPrompt);
+            }
           }
           if (parsedBsRows.length >= 1) {
-            if (!currentQ.bsItems) currentQ.bsItems = [];
-            currentQ.bsItems.push(...parsedBsRows);
+            parsedBsRows.forEach(it => pushUniqueBsItem(currentQ, it));
             currentQ.skipMarkdownTableRows = true;
             currentQ.inPembahasan = false;
             inOptions = false;
@@ -1435,7 +1791,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       }
 
       if (currentQ) {
-        questions.push(finalizeQuestion(currentQ, docxImages, tables));
+        questions.push(finalizeQuestion(currentQ, docxImages, tables, imageMeta));
       }
 
       let initialPertanyaanLines = [];
@@ -1488,31 +1844,80 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
     }
 
     // Ekstrak pernyataan Benar/Salah format Afresto Legacy ("Pernyataan: ... Hasil Pernyataan : BENAR/SALAH") sebelum label generic Pernyataan:
-    if (!inOptions && !currentQ.inPembahasan && !(line.startsWith('|') && currentQ.skipMarkdownTableRows)) {
-      const directBs = parseAfrestoBsStatement(plainLine);
-      if (directBs) {
-        if (!currentQ.bsItems) currentQ.bsItems = [];
-        currentQ.bsItems.push(directBs);
+    const isEmptyBsPembahasan = currentQ.explicitTipe === 'BENAR_SALAH' && currentQ.inPembahasan &&
+      (!currentQ.bsItems || currentQ.bsItems.length === 0) && !currentQ.pembahasan;
+    if (!inOptions && (!currentQ.inPembahasan || isEmptyBsPembahasan) && !(line.startsWith('|') && currentQ.skipMarkdownTableRows)) {
+      const { items: bsMultiItems, trailingPrompt: bsTrailing } = extractAllAfrestoBsStatements(plainLine);
+      if (bsMultiItems.length > 0) {
+        currentQ.inPembahasan = false;
+        bsMultiItems.forEach(it => pushUniqueBsItem(currentQ, it));
+        if (bsTrailing) currentQ.pertanyaanLines.push(bsTrailing);
+        currentQ._bsExpectingItem = false;
         continue;
       }
       if (currentQ.explicitTipe === 'BENAR_SALAH' && /^Pernyataan\s*[:=]/i.test(plainLine) && i + 1 < lines.length) {
         const nextPlain = stripMarkdownMarks(lines[i + 1]);
-        const combinedBs = parseAfrestoBsStatement(`${plainLine} ${nextPlain}`);
-        if (combinedBs) {
-          if (!currentQ.bsItems) currentQ.bsItems = [];
-          currentQ.bsItems.push(combinedBs);
+        const { items: combItems, trailingPrompt: combTrailing } = extractAllAfrestoBsStatements(`${plainLine} ${nextPlain}`);
+        if (combItems.length > 0) {
+          currentQ.inPembahasan = false;
+          combItems.forEach(it => pushUniqueBsItem(currentQ, it));
+          if (combTrailing) currentQ.pertanyaanLines.push(combTrailing);
+          currentQ._bsExpectingItem = false;
           i += 1;
           continue;
         }
       }
+      const standaloneBsRes = currentQ.explicitTipe === 'BENAR_SALAH'
+        ? plainLine.match(/^Hasil\s+Pernyataan\s*[:=]\s*(Benar|Salah|True|False)\s*$/i)
+        : null;
+      if (standaloneBsRes) {
+        currentQ.inPembahasan = false;
+        const bsVal = /^(?:benar|true)$/i.test(standaloneBsRes[1]) ? 'Benar' : 'Salah';
+        if (!currentQ._bsStandaloneVals) currentQ._bsStandaloneVals = [];
+        currentQ._bsStandaloneVals.push(bsVal);
+        if (Array.isArray(currentQ._bsPendingLines) && currentQ._bsPendingLines.length > 0) {
+          const stmtText = stripMarkdownMarks(currentQ._bsPendingLines.join(' '))
+            .replace(/^Pernyataan\s*[:=]\s*/i, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          currentQ._bsPendingLines = [];
+          currentQ._bsExpectingItem = false;
+          if (stmtText) pushUniqueBsItem(currentQ, { teks: stmtText, nilai: bsVal });
+          continue;
+        }
+        if (Array.isArray(currentQ._bsPendingImgQueue) && currentQ._bsPendingImgQueue.length > 0) {
+          const imgTag = currentQ._bsPendingImgQueue.shift();
+          if (imgTag && docxImages[imgTag]) {
+            pushUniqueBsItem(currentQ, {
+              teks: `<img src="${docxImages[imgTag]}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`,
+              nilai: bsVal
+            });
+            if (!currentQ._bsConsumedImgTags) currentQ._bsConsumedImgTags = [];
+            currentQ._bsConsumedImgTags.push(imgTag);
+            if (Array.isArray(currentQ.gambarTags)) {
+              const rmIdx = currentQ.gambarTags.indexOf(imgTag);
+              if (rmIdx !== -1) currentQ.gambarTags.splice(rmIdx, 1);
+            }
+            currentQ.gambarTag = (currentQ.gambarTags && currentQ.gambarTags[0]) || null;
+          }
+          currentQ._bsExpectingItem = false;
+          continue;
+        }
+        currentQ._bsExpectingItem = false;
+        continue;
+      }
     }
 
     // Lewati label murni 'Pertanyaan:' / 'Soal:' / 'Pernyataan:' agar tidak mengotori badan teks pertanyaan
-    if (!inOptions && !currentQ.inPembahasan) {
+    if (!inOptions && (!currentQ.inPembahasan || isEmptyBsPembahasan)) {
       const pLabelMatch = plainLine.match(/^(?:Pertanyaan|Soal|Pernyataan)\s*[:=]\s*(.*)$/i);
       if (pLabelMatch) {
-        if (pLabelMatch[1].trim()) {
-          currentQ.pertanyaanLines.push(pLabelMatch[1].trim());
+        currentQ.inPembahasan = false;
+        const labelRest = pLabelMatch[1].trim();
+        if (currentQ.explicitTipe === 'BENAR_SALAH' && /^Pernyataan\s*[:=]/i.test(plainLine) && !labelRest) {
+          currentQ._bsExpectingItem = true;
+        } else if (labelRest) {
+          currentQ.pertanyaanLines.push(labelRest);
         }
         continue;
       }
@@ -1540,6 +1945,11 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
       currentQ.kunci = normalizeExtractedKey(keyMatch[1]);
       currentQ.hasExplicitKey = true;
       currentQ.inPembahasan = false;
+      continue;
+    }
+
+    // Lewati baris tabel markdown yang sudah diekstrak melalui [TABEL_X] agar tidak dipecah sebagai inline/optRegex (misal tabel 4-kolom opsi)
+    if (line.startsWith('|') && (currentQ.skipMarkdownTableRows || (inOptions && currentQ.tableOptionsTag))) {
       continue;
     }
 
@@ -1642,11 +2052,21 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         const imgTagHtml = `<img src="${docxImages[tag]}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
         const prevOpt = currentQ.opsi[targetOptLetter] || '';
         currentQ.opsi[targetOptLetter] = prevOpt ? `${prevOpt} ${imgTagHtml}` : imgTagHtml;
+        if (!currentQ.opsiImgTags) currentQ.opsiImgTags = {};
+        if (!currentQ.opsiImgTags[targetOptLetter]) currentQ.opsiImgTags[targetOptLetter] = [];
+        currentQ.opsiImgTags[targetOptLetter].push(tag);
         continue;
+      }
+      if (isEmptyBsPembahasan) {
+        currentQ.inPembahasan = false;
       }
       if (!currentQ.gambarTags) currentQ.gambarTags = [];
       if (!currentQ.gambarTags.includes(tag)) currentQ.gambarTags.push(tag);
       currentQ.gambarTag = currentQ.gambarTags[0];
+      if (!inOptions && !currentQ.inPembahasan && currentQ.explicitTipe === 'BENAR_SALAH') {
+        if (!currentQ._bsPendingImgQueue) currentQ._bsPendingImgQueue = [];
+        if (!currentQ._bsPendingImgQueue.includes(tag)) currentQ._bsPendingImgQueue.push(tag);
+      }
       continue;
     }
 
@@ -1691,10 +2111,10 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
         continue; // Lewati baris markdown jika tabel opsi atau tabel matching sudah diekstrak dari objek tabel
       }
       if (!inOptions) {
-        const mdBsItem = parseAfrestoBsStatement(line);
-        if (mdBsItem && (currentQ.explicitTipe === 'BENAR_SALAH' || /Hasil\s+Pernyataan\s*[:=]/i.test(line))) {
-          if (!currentQ.bsItems) currentQ.bsItems = [];
-          currentQ.bsItems.push(mdBsItem);
+        const { items: mdBsItems, trailingPrompt: mdBsTrailing } = extractAllAfrestoBsStatements(line);
+        if (mdBsItems.length > 0 && (currentQ.explicitTipe === 'BENAR_SALAH' || /Hasil\s+Pernyataan\s*[:=]/i.test(line))) {
+          mdBsItems.forEach(it => pushUniqueBsItem(currentQ, it));
+          if (mdBsTrailing) currentQ.pertanyaanLines.push(mdBsTrailing);
           continue;
         }
         const cells = line.split('|').map(c => c.trim()).filter(Boolean);
@@ -1727,7 +2147,14 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
           continue;
         }
       }
-      currentQ.pertanyaanLines.push(line);
+      if (currentQ.explicitTipe === 'BENAR_SALAH' && currentQ._bsExpectingItem &&
+          !/^(?:analisalah|tentukan|perhatikan|berdasarkan)\b/i.test(plainLine)) {
+        if (!currentQ._bsPendingLines) currentQ._bsPendingLines = [];
+        currentQ._bsPendingLines.push(line);
+      } else {
+        currentQ._bsExpectingItem = false;
+        currentQ.pertanyaanLines.push(line);
+      }
     } else {
       // Jika sudah masuk opsi tapi ada baris lanjutan, sambungkan ke opsi terakhir
       const lastKey = Object.keys(currentQ.opsi).pop();
@@ -1745,7 +2172,7 @@ export function parseQuestionsDirectly(rawText, docxImages = {}, tables = []) {
 
   if (currentQ) {
     flushMatchingMarkdownBuffer(currentQ);
-    questions.push(finalizeQuestion(currentQ, docxImages, tables));
+    questions.push(finalizeQuestion(currentQ, docxImages, tables, imageMeta));
   }
 
   // Rekonsiliasi antrean Pernyataan Kiri & Pernyataan Kanan (FIFO) untuk soal MENCOCOKKAN yang tabel kanannya terpisah / floating
@@ -2161,8 +2588,162 @@ export function normalizeFormulasAndSuperscripts(text) {
   return res;
 }
 
-function finalizeQuestion(q, docxImages, tables = []) {
-  let pertanyaan = q.pertanyaanLines.join('\n').trim();
+function redistributeOptionImages(q, pertanyaan, tipe, docxImages, imageMeta = {}) {
+  if (tipe !== 'PG' && tipe !== 'PG_KOMPLEKS') return;
+  const optKeys = Object.keys(q.opsi || {}).sort();
+  if (optKeys.length < 4) return;
+  const emptyKeys = optKeys.filter(k => !String(q.opsi[k] || '').trim());
+  if (emptyKeys.length === 0) return;
+
+  const makeImgHtml = (url) => `<img src="${url}" style="max-height:140px; max-width:100%; display:inline-block; vertical-align:middle;" />`;
+  const assignTagsToSlots = (tags, targetKeys) => {
+    if (!Array.isArray(tags) || tags.length === 0 || !targetKeys || targetKeys.length === 0) return false;
+    if (tags.length === targetKeys.length) {
+      for (let idx = 0; idx < targetKeys.length; idx++) {
+        const url = docxImages[tags[idx]];
+        if (url) q.opsi[targetKeys[idx]] = makeImgHtml(url);
+      }
+      return true;
+    }
+    const cys = tags.map(t => imageMeta[t]?.cy || 0).filter(v => v > 0).sort((a, b) => a - b);
+    const medCy = cys.length > 0 ? cys[Math.floor(cys.length / 2)] : 0;
+    if (tags.length < targetKeys.length && medCy > 0) {
+      const slots = tags.map(t => ((imageMeta[t]?.cy || 0) >= medCy * 1.7 ? 2 : 1));
+      const slotSum = slots.reduce((a, b) => a + b, 0);
+      if (slotSum === targetKeys.length) {
+        if (!q._pendingImgSplits) q._pendingImgSplits = [];
+        let targetIdx = 0;
+        for (let k = 0; k < tags.length; k++) {
+          const url = docxImages[tags[k]];
+          if (slots[k] === 1) {
+            const k1 = targetKeys[targetIdx++];
+            if (url) q.opsi[k1] = makeImgHtml(url);
+          } else {
+            const topKey = targetKeys[targetIdx++];
+            const botKey = targetKeys[targetIdx++];
+            if (url) {
+              q.opsi[topKey] = makeImgHtml(url);
+              q.opsi[botKey] = makeImgHtml(url);
+              q._pendingImgSplits.push({ optKeyTop: topKey, optKeyBottom: botKey, rId: tags[k] });
+            }
+          }
+        }
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Case A: Seluruh opsi A-E kosong + ada teks pertanyaan + jumlah gambar stem tepat sebanyak jumlah opsi (misal Soal #7)
+  if (emptyKeys.length === optKeys.length && pertanyaan.trim().length > 0 &&
+      Array.isArray(q.gambarTags) && q.gambarTags.length === optKeys.length) {
+    if (assignTagsToSlots(q.gambarTags, optKeys)) {
+      q.gambarTags = [];
+      q.gambarTag = null;
+    }
+    return;
+  }
+
+  // Case B: Satu opsi menampung >=2 gambar sedangkan opsi lain kosong (misal Soal #8 & #21)
+  const bunchKey = optKeys.find(k => {
+    const tags = q.opsiImgTags?.[k];
+    const nonImgText = String(q.opsi[k] || '').replace(/<img\b[^>]*>/gi, '').trim();
+    return Array.isArray(tags) && tags.length >= 2 && nonImgText === '';
+  });
+  if (bunchKey && emptyKeys.length >= 1) {
+    const targetKeys = optKeys.filter(k => k === bunchKey || !String(q.opsi[k] || '').trim());
+    if (assignTagsToSlots(q.opsiImgTags[bunchKey], targetKeys)) {
+      return;
+    }
+  }
+
+  // Case C: Batang soal hanya gambar (tanpa teks) + grup <wpg:wgp> opsi lebih sempit/bergeser ke kanan (misal Soal #19)
+  if (emptyKeys.length >= 2 && Array.isArray(q.gambarTags) && q.gambarTags.length >= 2) {
+    const groupTags = q.gambarTags.filter(t => imageMeta[t]?.inGroup);
+    const soloTags = q.gambarTags.filter(t => !imageMeta[t]?.inGroup);
+    if (groupTags.length >= 2 && soloTags.length >= 1) {
+      const maxSoloCx = Math.max(...soloTags.map(t => imageMeta[t]?.cx || 0));
+      const maxGroupCx = Math.max(...groupTags.map(t => imageMeta[t]?.cx || 0));
+      const minSoloPosH = Math.min(...soloTags.map(t => imageMeta[t]?.posH ?? Infinity));
+      const minGroupPosH = Math.min(...groupTags.map(t => imageMeta[t]?.posH ?? 0));
+      if (maxSoloCx > maxGroupCx * 1.35 || (minSoloPosH < Infinity && minGroupPosH > minSoloPosH + 80000)) {
+        if (assignTagsToSlots(groupTags, emptyKeys)) {
+          q.gambarTags = soloTags;
+          q.gambarTag = soloTags[0] || null;
+          return;
+        }
+      }
+    }
+  }
+
+  // Case D: Gambar opsi ganda (tinggi ~2x) tepat sebelum 1 opsi kosong tersisa (misal Soal #34 opsi D+E)
+  if (emptyKeys.length === 1) {
+    const filledImgHeights = optKeys
+      .filter(k => q.opsiImgTags?.[k]?.length === 1)
+      .map(k => imageMeta[q.opsiImgTags[k][0]]?.cy || 0)
+      .filter(v => v > 0)
+      .sort((a, b) => a - b);
+    const medCy = filledImgHeights.length >= 3
+      ? filledImgHeights[Math.min(1, filledImgHeights.length - 1)]
+      : (filledImgHeights[0] || 0);
+    const prevIdx = optKeys.indexOf(emptyKeys[0]) - 1;
+    if (prevIdx >= 0 && medCy > 0) {
+      const prevKey = optKeys[prevIdx];
+      const prevTag = q.opsiImgTags?.[prevKey]?.[0];
+      const prevCy = prevTag ? (imageMeta[prevTag]?.cy || 0) : 0;
+      if (prevTag && prevCy >= medCy * 1.7 && docxImages[prevTag]) {
+        if (!q._pendingImgSplits) q._pendingImgSplits = [];
+        q.opsi[emptyKeys[0]] = makeImgHtml(docxImages[prevTag]);
+        q._pendingImgSplits.push({ optKeyTop: prevKey, optKeyBottom: emptyKeys[0], rId: prevTag });
+      }
+    }
+  }
+}
+
+function finalizeQuestion(q, docxImages, tables = [], imageMeta = {}) {
+  if (Array.isArray(q._bsPendingLines) && q._bsPendingLines.length > 0) {
+    q.pertanyaanLines.push(...q._bsPendingLines);
+    q._bsPendingLines = [];
+  }
+
+  // Kembalikan gambar jika ternyata 1 gambar mewakili >=2 Hasil Pernyataan (misal Soal #38)
+  if (q.explicitTipe === 'BENAR_SALAH' && q.bsItems && q.bsItems.length === 1 &&
+      Array.isArray(q._bsStandaloneVals) && q._bsStandaloneVals.length >= 2 &&
+      Array.isArray(q._bsConsumedImgTags) && q._bsConsumedImgTags.length > 0) {
+    if (!q.gambarTags) q.gambarTags = [];
+    for (const cTag of q._bsConsumedImgTags) {
+      if (!q.gambarTags.includes(cTag)) q.gambarTags.unshift(cTag);
+    }
+    q.gambarTag = q.gambarTags[0] || null;
+    q.bsItems = [];
+    let vals = [...q._bsStandaloneVals];
+    if (vals.length >= 4 && vals.length % 2 === 0) {
+      const half = vals.length / 2;
+      const firstHalf = vals.slice(0, half);
+      const secondHalf = vals.slice(half);
+      if (firstHalf.every((v, idx) => v === secondHalf[idx])) {
+        vals = firstHalf;
+      }
+    }
+    if (!q.bsFallbackKeys) q.bsFallbackKeys = {};
+    vals.slice(0, 10).forEach((v, idx) => {
+      const letter = String.fromCharCode(65 + idx);
+      if (!q.bsFallbackKeys[letter]) q.bsFallbackKeys[letter] = v;
+    });
+  }
+
+  const dedupedLines = [];
+  const seenNonEmpty = new Set();
+  for (const rawLine of q.pertanyaanLines || []) {
+    const cleanL = deduplicateDoubledLine(rawLine);
+    const normL = stripMarkdownMarks(cleanL).replace(/\s+/g, ' ').trim();
+    if (normL.length >= 25) {
+      if (seenNonEmpty.has(normL)) continue;
+      seenNonEmpty.add(normL);
+    }
+    dedupedLines.push(cleanL);
+  }
+  let pertanyaan = dedupedLines.join('\n').trim();
 
   // Konversi markdown formatting (**bold** & *italic*) menjadi tag HTML resmi agar tampil tebal di UI & TinyMCE
   pertanyaan = pertanyaan.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
@@ -2449,6 +3030,8 @@ function finalizeQuestion(q, docxImages, tables = []) {
     pertanyaan = pertanyaan.replace(/\[TABEL_\d+\]/g, '').trim();
   }
 
+  redistributeOptionImages(q, pertanyaan, tipe, docxImages, imageMeta);
+
   // 7. Normalisasi formula, eksponen pangkat, dan subskrip/superskrip (urutkan kunci opsi A..F)
   pertanyaan = normalizeFormulasAndSuperscripts(pertanyaan);
   const cleanNormalizedOpsi = {};
@@ -2507,6 +3090,10 @@ function finalizeQuestion(q, docxImages, tables = []) {
   } else if (q.gambarTag && docxImages[q.gambarTag]) {
     res.gambar_base64 = docxImages[q.gambarTag];
     res.butuh_gambar = true;
+  }
+
+  if (Array.isArray(q._pendingImgSplits) && q._pendingImgSplits.length > 0) {
+    res._pendingImgSplits = q._pendingImgSplits;
   }
 
   return res;
